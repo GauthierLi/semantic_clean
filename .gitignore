@@ -1,0 +1,9 @@
+data/
+build/
+*.egg-info/
+.vscode/
+__pycache__/
+test*
+
+*_pb2.py
+*.pth
