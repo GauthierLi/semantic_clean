@@ -8,9 +8,10 @@ from torchvision import transforms
 from sklearn.decomposition import PCA
 
 class DINOv3FeatureExtractor:
-    def __init__(self, model_path=None):
+    def __init__(self, model_path=None, batch_size=32):
         self.model = self._load_model(model_path)
         self.transform = self._make_transform()
+        self.batch_size = batch_size  # 统一的批量大小超参数
 
     def _make_transform(self, resize_size=256):
         """Create image transformation pipeline"""
@@ -39,16 +40,62 @@ class DINOv3FeatureExtractor:
             
         return torch.hub.load(dino3_path, 'dinov3_vitb16', source='local', weights=model_path)
 
+    def extract_features_batch(self, images, batch_size=None):
+        """批量提取特征，支持多张图片同时处理
+        
+        Args:
+            images: 图片列表
+            batch_size: 批量大小，如果为None则使用实例默认值
+        """
+        if not images:
+            return torch.empty(0, 0)
+            
+        if batch_size is None:
+            batch_size = self.batch_size
+            
+        # 批量大小验证
+        if batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {batch_size}")
+            
+        # 如果图片数量小于等于批量大小，直接处理
+        if len(images) <= batch_size:
+            batch_tensors = torch.stack([self.transform(img) for img in images])
+            with torch.no_grad():
+                features = self.model.forward_features(batch_tensors)
+            return torch.nn.functional.normalize(features['x_norm_clstoken'], dim=-1)
+        
+        # 否则分批处理并合并结果
+        all_features = []
+        for i in range(0, len(images), batch_size):
+            batch_images = images[i:i+batch_size]
+            try:
+                batch_tensors = torch.stack([self.transform(img) for img in batch_images])
+                with torch.no_grad():
+                    batch_features = self.model.forward_features(batch_tensors)
+                normalized_features = torch.nn.functional.normalize(batch_features['x_norm_clstoken'], dim=-1)
+                all_features.append(normalized_features)
+            except Exception as e:
+                print(f"Warning: Failed to process batch {i//batch_size}: {e}")
+                continue
+        
+        if not all_features:
+            return torch.empty(0, 0)
+            
+        return torch.cat(all_features, dim=0)
+
     def extract_features(self, image: np.ndarray):
         """Extract features from image using DINOv3"""
-        tensor_image = self.transform(image)[None]
-        with torch.no_grad():
-            features = self.model.forward_features(tensor_image)
-        
-        if os.getenv("DEBUG"):
-            self._debug_visualize(image, features)
-            
-        return torch.nn.functional.normalize(features['x_norm_clstoken'], dim=-1)
+        # 使用批量方法保持向后兼容性
+        batch_features = self.extract_features_batch([image])
+        if batch_features.numel() == 0:
+            return torch.empty(0)
+        return batch_features[0]
+
+    def update_batch_size(self, new_batch_size: int):
+        """动态更新批量大小"""
+        if new_batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {new_batch_size}")
+        self.batch_size = new_batch_size
 
     def _debug_visualize(self, image, features):
         """Debug visualization of features"""

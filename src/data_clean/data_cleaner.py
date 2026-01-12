@@ -74,7 +74,7 @@ class DataCleaner:
                 error_result = {
                     'image_id': item.get('id', 'unknown'),
                     'image_path': item.get('image_path', ''),
-                    'status': 'reject',
+                    'decision': 'reject',
                     'error': str(e)
                 }
                 batch_results.append(error_result)
@@ -91,7 +91,7 @@ class DataCleaner:
             return {
                 'image_id': image_id,
                 'image_path': image_path,
-                'status': 'reject',
+                'decision': 'reject',
                 'error': '缺少图像路径'
             }
         
@@ -99,7 +99,7 @@ class DataCleaner:
             return {
                 'image_id': image_id,
                 'image_path': image_path,
-                'status': 'reject',
+                'decision': 'reject',
                 'error': '图像文件不存在'
             }
         
@@ -110,7 +110,7 @@ class DataCleaner:
                 return {
                     'image_id': image_id,
                     'image_path': image_path,
-                    'status': 'reject',
+                    'decision': 'reject',
                     'error': '无法读取图像文件'
                 }
             
@@ -121,7 +121,7 @@ class DataCleaner:
             return {
                 'image_id': image_id,
                 'image_path': image_path,
-                'status': 'reject',
+                'decision': 'reject',
                 'error': f'特征提取失败: {str(e)}'
             }
         
@@ -133,7 +133,7 @@ class DataCleaner:
             return {
                 'image_id': image_id,
                 'image_path': image_path,
-                'status': 'review',
+                'decision': 'review',
                 'error': '没有指定类别'
             }
         
@@ -145,7 +145,7 @@ class DataCleaner:
         return {
             'image_id': image_id,
             'image_path': image_path,
-            'status': validation_result['decision'],
+            'decision': validation_result['decision'],
             'score': validation_result['score'],
             'category': target_category,
             'metrics': validation_result.get('metrics', {}),
@@ -206,9 +206,9 @@ class DataCleaner:
     def get_statistics(self, results: List[Dict]) -> Dict:
         """获取清洗结果的统计信息"""
         total = len(results)
-        accept_count = sum(1 for r in results if r.get('status') == 'accept')
-        reject_count = sum(1 for r in results if r.get('status') == 'reject')
-        review_count = sum(1 for r in results if r.get('status') == 'review')
+        accept_count = sum(1 for r in results if r.get('decision') == 'accept')
+        reject_count = sum(1 for r in results if r.get('decision') == 'reject')
+        review_count = sum(1 for r in results if r.get('decision') == 'review')
         error_count = sum(1 for r in results if r.get('error'))
         
         return {

@@ -1,5 +1,6 @@
 from .image_serializer import ImageSerializer
 from .feature_extractor import DINOv3FeatureExtractor
+from .multi_gpu_extractor import MultiGPUFeatureExtractor
 from .chroma_manager import ChromaDBManager
 from .utils import (
     load_images_from_dir,
@@ -12,6 +13,7 @@ from .utils import (
 __all__ = [
     'ImageSerializer',
     'DINOv3FeatureExtractor',
+    'MultiGPUFeatureExtractor',
     'ChromaDBManager',
     'load_images_from_dir',
     'save_metadata',
