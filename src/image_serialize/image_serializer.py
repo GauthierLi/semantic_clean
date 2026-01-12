@@ -1,11 +1,12 @@
-from .feature_extractor import DINOv3FeatureExtractor
-from .chroma_manager import ChromaDBManager
-import numpy as np
-from typing import Dict, List, Optional
-import json
 import os
 import cv2
+import json
+import numpy as np
+
 from tqdm import tqdm
+from typing import Dict, List, Optional
+from .chroma_manager import ChromaDBManager
+from .feature_extractor import DINOv3FeatureExtractor
 
 class ImageSerializer:
     def __init__(self, db_path: str = "chroma_db", model_path: str = None):

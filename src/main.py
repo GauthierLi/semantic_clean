@@ -1,27 +1,69 @@
 import argparse
-from .image_searilize import ImageSerializer
+from .image_serialize import ImageSerializer
+from .data_clean import DataCleaner
 import json
 import os
+import sys
 
 def main():
     parser = argparse.ArgumentParser(description='Semantic Clean CLI Tool')
     parser.add_argument('--generate', action='store_true', help='Generate database from JSON file')
-    parser.add_argument('--file', type=str, help='Input JSON file path')
+    parser.add_argument('--clean', action='store_true', help='Clean target data using database')
+    parser.add_argument('--file', type=str, help='Input JSON file path for generation')
+    parser.add_argument('--base', type=str, help='Base database path for reference')
+    parser.add_argument('--target', type=str, help='Target JSON file to clean')
+    parser.add_argument('--output', type=str, help='Output JSON file for cleaned results')
     parser.add_argument('--db-path', type=str, default='chroma_db', help='Path to ChromaDB database')
     
     args = parser.parse_args()
     
-    if args.generate and args.file:
-        if not os.path.exists(args.file):
-            print(f"Error: Input file {args.file} does not exist")
+    try:
+        if args.generate and args.file:
+            if not os.path.exists(args.file):
+                print(f"Error: Input file {args.file} does not exist")
+                return 1
+                
+            serializer = ImageSerializer(db_path=args.db_path)
+            print(f"Generating database from {args.file}...")
+            serializer.load_from_json(args.file)
+            print(f"Database generated at {args.db_path}")
+            
+        elif args.clean and args.base and args.target and args.output:
+            if not os.path.exists(args.base):
+                print(f"Error: Base database path {args.base} does not exist")
+                return 1
+                
+            if not os.path.exists(args.target):
+                print(f"Error: Target file {args.target} does not exist")
+                return 1
+            
+            print(f"Starting data cleaning process...")
+            print(f"Base database: {args.base}")
+            print(f"Target file: {args.target}")
+            print(f"Output file: {args.output}")
+            
+            cleaner = DataCleaner(db_path=args.base)
+            results = cleaner.clean_target_data(args.target, args.output)
+            
+            # 显示统计信息
+            stats = cleaner.get_statistics(results)
+            print("\n=== 清洗结果统计 ===")
+            print(f"总计: {stats['total']}")
+            print(f"接受 (Accept): {stats['accept']} ({stats['accept_rate']:.2%})")
+            print(f"拒绝 (Reject): {stats['reject']} ({stats['reject_rate']:.2%})")
+            print(f"人工审核 (Review): {stats['review']} ({stats['review_rate']:.2%})")
+            if stats['error'] > 0:
+                print(f"处理错误: {stats['error']}")
+            
+        else:
+            parser.print_help()
             return 1
             
-        serializer = ImageSerializer(db_path=args.db_path)
-        print(f"Generating database from {args.file}...")
-        serializer.load_from_json(args.file)
-        print(f"Database generated at {args.db_path}")
-    else:
-        parser.print_help()
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return 1
+    
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

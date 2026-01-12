@@ -1,7 +1,8 @@
 import json
 import chromadb
-from typing import List, Dict, Optional
 import numpy as np
+
+from typing import List, Dict, Optional
 
 class ChromaDBManager:
     def __init__(self, db_path: str = "chroma_db"):
@@ -42,13 +43,68 @@ class ChromaDBManager:
     def query_by_category(
         self,
         category: str,
+        include_embeddings: bool = False
     ) -> List[Dict]:
         """Query images by category using boolean field"""
+        include_list = ['metadatas']
+        if include_embeddings:
+            include_list.append('embeddings')
+        
         # 使用get()方法的where参数直接过滤，返回所有匹配的样本
         return self.collection.get(
             where={f"is_{category}": True},
-            include=['metadatas']
+            include=include_list
         )
+    
+    def get_class_features(self, category: str) -> np.ndarray:
+        """获取指定类别的所有特征向量"""
+        result = self.query_by_category(category, include_embeddings=True)
+        
+        # 检查embeddings是否存在且不为空
+        if result.get('embeddings') is None or len(result['embeddings']) == 0:
+            return np.array([])
+        
+        return np.array(result['embeddings'])
+    
+    def get_class_statistics(self, category: str) -> Dict:
+        """获取指定类别的统计信息"""
+        features = self.get_class_features(category)
+        
+        if len(features) == 0:
+            return {
+                'count': 0,
+                'mean': None,
+                'std': None,
+                'mean_intra_distance': 0.0
+            }
+        
+        # 获取特征的形状信息
+        if features.ndim == 1:
+            # 如果是1D数组，说明只有一个特征向量
+            count = 1
+            features_reshaped = features.reshape(1, -1)
+        else:
+            count = features.shape[0]
+            features_reshaped = features
+        
+        mean_feature = np.mean(features_reshaped, axis=0)
+        
+        # 计算类内平均距离
+        if count > 1:
+            distances = []
+            for feature in features_reshaped:
+                dist = np.linalg.norm(feature - mean_feature)
+                distances.append(dist)
+            mean_intra_distance = np.mean(distances)
+        else:
+            mean_intra_distance = 0.0
+        
+        return {
+            'count': count,
+            'mean': mean_feature,
+            'features': features_reshaped,
+            'mean_intra_distance': mean_intra_distance
+        }
 
     def get_all_categories(self) -> List[str]:
         """Get list of all unique categories in the database"""

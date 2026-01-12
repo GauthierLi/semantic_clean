@@ -1,10 +1,11 @@
 import os
-import subprocess
-import torch
-import numpy as np
 import cv2
-from sklearn.decomposition import PCA
+import torch
+import subprocess
+import numpy as np
+
 from torchvision import transforms
+from sklearn.decomposition import PCA
 
 class DINOv3FeatureExtractor:
     def __init__(self, model_path=None):
