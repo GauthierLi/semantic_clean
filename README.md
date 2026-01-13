@@ -6,6 +6,11 @@ Label consistency validation based on DINOv3 embeddings, providing intelligent c
 
 ### Installation
 ```bash
+conda env create -f environment.yml
+conda activate torch
+```
+
+```bash
 python3 -m pip install -v -e .
 ```
 
@@ -122,14 +127,14 @@ Label consistency validation based on DINOv3 embeddings, evaluating image label 
 ### 3.2 Confidence Score
 
 Comprehensive scoring formula:
-```
-S = w1 × p - w2 × d_min^norm - w3 × d_μ^norm
-```
+$$
+S = w_1 × p - w_2 × d_{min}^{norm} - w_3 × d_μ^{norm}
+$$
 
 Default weights:
-- w1 = 1.0 (kNN consistency weight)
-- w2 = 0.5 (nearest distance weight)  
-- w3 = 0.5 (class mean distance weight)
+- $w_1$ = 1.0 (kNN consistency weight)
+- $w_2$ = 0.5 (nearest distance weight)  
+- $w_3$ = 0.5 (class mean distance weight)
 
 ### 3.3 Decision Strategy
 
