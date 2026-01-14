@@ -5,6 +5,23 @@ import json
 import os
 import sys
 
+SUBTYPE_DEFAULT_CLASSES = [
+    "SV_NONE",
+    "SV_FIRE_ENGINE",
+    "SV_AMBULANCE",
+    "SV_POLICE_CAR",
+    "SV_SPRINKLER",
+    "SV_SPRINKLER_WO_BRUSH",
+    "SV_SANITIZATION_VEHICLE",
+    "SV_SCHOOL_BUS",
+    "STOP_SIGN_UNSEEN",
+    "STOP_SIGN_ON",
+    "STOP_SIGN_OFF",
+    "PROFESSION_NONE",
+    "PROFESSION_POLICE",
+    "PROFESSION_CONSTRUCTOR",
+]
+
 def main():
     parser = argparse.ArgumentParser(description='Semantic Clean CLI Tool')
     parser.add_argument('--generate', action='store_true', help='Generate database from JSON file')
@@ -42,7 +59,8 @@ def main():
             print(f"Target file: {args.target}")
             print(f"Output file: {args.output}")
             
-            cleaner = DataCleaner(db_path=args.base)
+            cleaner = DataCleaner(db_path=args.base,
+                                  validate_categories=SUBTYPE_DEFAULT_CLASSES)
             results = cleaner.clean_target_data(args.target, args.output)
             
             # 显示统计信息

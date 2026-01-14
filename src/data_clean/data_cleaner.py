@@ -9,13 +9,27 @@ from .label_validator import LabelValidator
 
 
 class DataCleaner:
-    def __init__(self, db_path: str):
-        """复用image_searilize中的组件"""
+    def __init__(self, db_path: str, validate_categories: List[str] = None):
+        """复用image_searilize中的组件
+        
+        Args:
+            db_path: 数据库路径
+            validate_categories: 需要验证的类别列表，为None或空列表时验证所有类别
+        """
         self.image_serializer = ImageSerializer(db_path=db_path)
         # 通过image_serializer访问已有的feature_extractor和db_manager
         self.feature_extractor = self.image_serializer.feature_extractor
         self.db_manager = self.image_serializer.db_manager
         self.label_validator = LabelValidator(self.db_manager)
+        # 配置需要验证的类别，为空时验证所有类别
+        self.validate_categories = validate_categories if validate_categories is not None else []
+        
+        # 验证配置参数类型
+        if not isinstance(self.validate_categories, list):
+            raise ValueError("validate_categories must be a list of strings")
+        for cat in self.validate_categories:
+            if not isinstance(cat, str):
+                raise ValueError("All items in validate_categories must be strings")
     
     def clean_target_data(self, target_json: str, output_json: str, batch_size: int = 50) -> List[Dict]:
         """清洗目标数据并返回结果，支持批处理以优化内存使用"""
@@ -125,31 +139,73 @@ class DataCleaner:
                 'error': f'特征提取失败: {str(e)}'
             }
         
-        # 如果有多个类别，选择第一个进行验证
-        # 在实际应用中，可能需要更复杂的多标签处理逻辑
-        target_category = categories[0] if categories else None
+        # 过滤需要验证的类别
+        if self.validate_categories:
+            # 只验证配置列表中的类别（如果存在于图像类别中）
+            categories_to_validate = [cat for cat in categories if cat in self.validate_categories]
+            if not categories_to_validate:
+                return {
+                    'image_id': image_id,
+                    'image_path': image_path,
+                    'decision': 'review',
+                    'total_categories': len(categories),
+                    'validated_categories': 0,
+                    'categories': [],
+                    'score': 0.0,
+                    'error': f'图像类别 {[categories]} 与配置的验证类别 {self.validate_categories} 无匹配'
+                }
+        else:
+            # 验证所有类别
+            categories_to_validate = categories
         
-        if not target_category:
+        if not categories_to_validate:
             return {
                 'image_id': image_id,
                 'image_path': image_path,
                 'decision': 'review',
+                'total_categories': len(categories),
+                'validated_categories': 0,
+                'categories': [],
+                'score': 0.0,
                 'error': '没有指定类别'
             }
         
-        # 进行标签验证
-        validation_result = self._validate_label_with_feature(
-            query_feature, target_category
-        )
-        
+        # 对指定类别进行验证
+        category_results = []
+        final_decision = "accept"  # 默认接受
+        overall_score = 0.0
+
+        for category in categories_to_validate:
+            validation_result = self._validate_label_with_feature(query_feature, category)
+            category_results.append({
+                'category': category,
+                'decision': validation_result['decision'],
+                'score': validation_result['score'],
+                'metrics': validation_result.get('metrics', {}),
+                'error': validation_result.get('error')
+            })
+            
+            # 综合决策逻辑：任一类别被reject则整体reject，任一类别被review且无reject则整体review
+            if validation_result['decision'] == 'reject':
+                final_decision = 'reject'
+            elif validation_result['decision'] == 'review' and final_decision != 'reject':
+                final_decision = 'review'
+            
+            overall_score += validation_result['score']
+
+        # 计算平均分数
+        if category_results:
+            overall_score = overall_score / len(category_results)
+
         return {
             'image_id': image_id,
             'image_path': image_path,
-            'decision': validation_result['decision'],
-            'score': validation_result['score'],
-            'category': target_category,
-            'metrics': validation_result.get('metrics', {}),
-            'error': validation_result.get('error')
+            'decision': final_decision,
+            'score': overall_score,
+            'categories': category_results,  # 包含验证类别的详细结果
+            'total_categories': len(categories),  # 原始类别总数
+            'validated_categories': len(categories_to_validate),  # 实际验证的类别数
+            'error': None if all(not r.get('error') for r in category_results) else "部分类别验证失败"
         }
     
     def _validate_label_with_feature(self, query_feature: np.ndarray, label: str) -> Dict:
