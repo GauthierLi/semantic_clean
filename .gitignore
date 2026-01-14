@@ -4,6 +4,10 @@ build/
 *.egg-info/
 .vscode/
 __pycache__/
+log*/
 
 *_pb2.py
 *.pth
+*.pid
+*.log
+*.backup
