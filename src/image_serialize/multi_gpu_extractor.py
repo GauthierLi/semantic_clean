@@ -212,23 +212,14 @@ class MultiGPUFeatureExtractor:
             raise
 
     def extract_features(self, image: np.ndarray) -> torch.Tensor:
-        """提取单张图片的特征
-        
-        Args:
-            image: 输入图片 (numpy array, BGR格式)
-            
-        Returns:
-            特征向量 (torch.Tensor)
-            
-        Raises:
-            Exception: 特征提取失败时抛出异常
-        """
         try:
-            # 使用批量方法处理单张图片
-            batch_features = self.extract_features_batch_multi_gpu([image])
-            if batch_features.numel() == 0:
-                return torch.empty(0)
-            return batch_features[0]
+            # 单张图片直接使用第一个GPU处理，避免批量分配的开销
+            if self.num_gpus == 1 or self.device_list[0] == 'cpu':
+                # 单GPU或CPU模式，直接处理
+                return self._extract_on_gpu(self.device_list[0], [image])[0]
+            else:
+                # 多GPU模式，使用第一个GPU处理单张图片
+                return self._extract_on_gpu(self.device_list[0], [image])[0]
         except Exception as e:
             logger.error(f"Failed to extract features from image: {e}")
             raise

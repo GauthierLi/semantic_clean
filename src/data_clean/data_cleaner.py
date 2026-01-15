@@ -3,6 +3,7 @@ import cv2
 import json
 import numpy as np
 import logging
+import torch
 from tqdm import tqdm
 
 from typing import Dict, List
@@ -74,13 +75,75 @@ class DataCleaner:
         print(f"数据清洗完成！处理了 {processed_count} 个图像，结果保存到 {output_json}")
         return results
     
+    def _extract_features_batch(self, batch_data: List[Dict]) -> Dict[str, torch.Tensor]:
+        """批量提取特征
+        
+        Args:
+            batch_data: 批次数据列表
+            
+        Returns:
+            字典，key为image_id，value为特征tensor
+        """
+        images = []
+        image_ids = []
+        
+        # 收集所有有效图像
+        for item in batch_data:
+            image_path = item.get('image_path', '')
+            if not image_path or not os.path.exists(image_path):
+                continue
+                
+            image = cv2.imread(image_path)
+            if image is None:
+                continue
+                
+            images.append(image)
+            image_ids.append(item.get('id', ''))
+        
+        if not images:
+            return {}
+        
+        # 批量提取特征
+        try:
+            if hasattr(self.feature_extractor, 'extract_features_batch_multi_gpu'):
+                # 多GPU模式
+                batch_features = self.feature_extractor.extract_features_batch_multi_gpu(images)
+            else:
+                # 单GPU模式
+                batch_features = self.feature_extractor.extract_features_batch(images)
+            
+            # 构建特征字典
+            features_dict = {}
+            for img_id, feature in zip(image_ids, batch_features):
+                features_dict[img_id] = feature
+            
+            return features_dict
+            
+        except Exception as e:
+            logger.error(f"批量特征提取失败: {e}")
+            # 回退到单张处理
+            features_dict = {}
+            for img_id, image in zip(image_ids, images):
+                try:
+                    feature = self.feature_extractor.extract_features(image)
+                    features_dict[img_id] = feature
+                except Exception as single_error:
+                    logger.error(f"单张图像特征提取失败 {img_id}: {single_error}")
+                    features_dict[img_id] = None
+            
+            return features_dict
+    
     def _process_batch(self, batch_data: List[Dict]) -> List[Dict]:
         """处理一个批次的数据"""
+        # 先批量提取特征
+        features_dict = self._extract_features_batch(batch_data)
+        
         batch_results = []
         
         for item in batch_data:
             try:
-                result = self.process_single_image(item)
+                # 使用预提取的特征
+                result = self.process_single_image(item, features_dict)
                 batch_results.append(result)
                     
             except Exception as e:
@@ -96,8 +159,13 @@ class DataCleaner:
         
         return batch_results
     
-    def process_single_image(self, image_data: Dict) -> Dict:
-        """处理单个图像的清洗逻辑，复用特征提取功能"""
+    def process_single_image(self, image_data: Dict, features_dict: Dict[str, torch.Tensor] = None) -> Dict:
+        """处理单个图像的清洗逻辑，支持使用预提取的特征
+        
+        Args:
+            image_data: 图像数据
+            features_dict: 预提取的特征字典（可选）
+        """
         image_id = image_data.get('id', '')
         image_path = image_data.get('image_path', '')
         categories = image_data.get('category', [])
@@ -122,16 +190,24 @@ class DataCleaner:
         
         # 提取特征
         try:
-            image = cv2.imread(image_path)
-            if image is None:
-                return {
-                    'image_id': image_id,
-                    'image_path': image_path,
-                    'decision': 'reject',
-                    'error': '无法读取图像文件'
-                }
+            # 优先使用预提取的特征
+            if features_dict and image_id in features_dict:
+                query_feature = features_dict[image_id]
+                if query_feature is None:
+                    raise ValueError("特征提取失败")
+            else:
+                # 回退到单张提取
+                image = cv2.imread(image_path)
+                if image is None:
+                    return {
+                        'image_id': image_id,
+                        'image_path': image_path,
+                        'decision': 'reject',
+                        'error': '无法读取图像文件'
+                    }
+                
+                query_feature = self.feature_extractor.extract_features(image)
             
-            query_feature = self.feature_extractor.extract_features(image)
             query_feature = query_feature.cpu().numpy().flatten()
             
         except Exception as e:
