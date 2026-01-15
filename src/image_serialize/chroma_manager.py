@@ -43,6 +43,37 @@ class ChromaDBManager:
             where=where
         )
         return results
+    
+    def query_by_feature_batch(
+        self,
+        query_features: List[np.ndarray],
+        n_results: int = 5,
+        where: Optional[Dict] = None
+    ) -> List[Dict]:
+        """批量查询相似图像，优化百万级样本性能
+        
+        Args:
+            query_features: 特征向量列表
+            n_results: 返回的最近邻数量
+            where: 过滤条件
+            
+        Returns:
+            查询结果列表
+        """
+        if not query_features:
+            return []
+        
+        # 将numpy数组转换为列表
+        embeddings_list = [f.tolist() for f in query_features]
+        
+        # 批量查询
+        results = self.collection.query(
+            query_embeddings=embeddings_list,
+            n_results=n_results,
+            where=where
+        )
+        
+        return results
 
     def query_by_category(
         self,

@@ -31,6 +31,7 @@ def main():
     parser.add_argument('--target', type=str, help='Target JSON file to clean')
     parser.add_argument('--output', type=str, help='Output JSON file for cleaned results')
     parser.add_argument('--db-path', type=str, default='chroma_db', help='Path to ChromaDB database')
+    parser.add_argument('--batch-size', type=int, default=50, help='Batch size for processing (default: 50)')
     
     args = parser.parse_args()
     
@@ -58,10 +59,11 @@ def main():
             print(f"Base database: {args.base}")
             print(f"Target file: {args.target}")
             print(f"Output file: {args.output}")
+            print(f"Batch size: {args.batch_size}")
             
             cleaner = DataCleaner(db_path=args.base,
                                   validate_categories=SUBTYPE_DEFAULT_CLASSES)
-            results = cleaner.clean_target_data(args.target, args.output)
+            results = cleaner.clean_target_data(args.target, args.output, batch_size=args.batch_size)
             
             # 显示统计信息
             stats = cleaner.get_statistics(results)

@@ -134,7 +134,7 @@ class DataCleaner:
             return features_dict
     
     def _process_batch(self, batch_data: List[Dict]) -> List[Dict]:
-        """处理一个批次的数据"""
+        """处理一个批次的数据 - 使用批量验证优化"""
         # 先批量提取特征
         features_dict = self._extract_features_batch(batch_data)
         
@@ -153,24 +153,141 @@ class DataCleaner:
         if all_categories:
             self.label_validator.preload_class_statistics(list(all_categories))
         
+        # 收集所有特征和标签用于批量验证
+        query_features = []
+        labels = []
+        image_indices = []  # 记录每个特征对应的原始数据索引
+        
+        for idx, item in enumerate(batch_data):
+            image_id = item.get('id', '')
+            categories = item.get('category', [])
+            
+            # 过滤需要验证的类别
+            if self.validate_categories:
+                categories_to_validate = [cat for cat in categories if cat in self.validate_categories]
+            else:
+                categories_to_validate = categories
+            
+            # 只处理有类别的数据
+            if not categories_to_validate:
+                continue
+            
+            # 获取特征
+            if image_id in features_dict and features_dict[image_id] is not None:
+                query_feature = features_dict[image_id].cpu().numpy().flatten()
+                
+                # 每个类别都需要验证
+                for category in categories_to_validate:
+                    query_features.append(query_feature)
+                    labels.append(category)
+                    image_indices.append(idx)
+        
+        # 批量计算所有指标
         batch_results = []
         
-        for item in batch_data:
-            try:
-                # 使用预提取的特征
-                result = self.process_single_image(item, features_dict)
-                batch_results.append(result)
-                    
-            except Exception as e:
-                print(f"处理图像时发生错误: {item.get('id', 'unknown')}, 错误: {str(e)}")
-                # 创建错误结果
-                error_result = {
-                    'image_id': item.get('id', 'unknown'),
+        if query_features:
+            # 批量计算kNN一致性
+            p_values = self.label_validator.batch_compute_knn_consistency(query_features, labels)
+            
+            # 批量计算类均值距离
+            d_mu_values = self.label_validator.batch_compute_class_mean_distance(query_features, labels)
+            
+            # 批量计算最近同类距离
+            d_min_values = self.label_validator.batch_compute_nearest_same_class_distance(query_features, labels)
+            
+            # 将结果映射回原始数据
+            results_map = {}  # image_idx -> list of (category, p, d_mu, d_min)
+            for i, (image_idx, category) in enumerate(zip(image_indices, labels)):
+                if image_idx not in results_map:
+                    results_map[image_idx] = []
+                results_map[image_idx].append({
+                    'category': category,
+                    'p': p_values[i],
+                    'd_mu': d_mu_values[i],
+                    'd_min': d_min_values[i]
+                })
+        
+        # 处理结果
+        for idx, item in enumerate(batch_data):
+            image_id = item.get('id', '')
+            categories = item.get('category', [])
+            
+            # 过滤需要验证的类别
+            if self.validate_categories:
+                categories_to_validate = [cat for cat in categories if cat in self.validate_categories]
+            else:
+                categories_to_validate = categories
+            
+            # 处理没有验证结果的情况
+            if idx not in results_map:
+                batch_results.append({
+                    'image_id': image_id,
                     'image_path': item.get('image_path', ''),
-                    'decision': 'reject',
-                    'error': str(e)
-                }
-                batch_results.append(error_result)
+                    'decision': 'review',
+                    'total_categories': len(categories),
+                    'validated_categories': 0,
+                    'categories': [],
+                    'score': 0.0,
+                    'error': '没有指定类别'
+                })
+                continue
+            
+            # 处理验证结果
+            category_results = []
+            final_decision = "accept"
+            overall_score = 0.0
+            
+            for result in results_map[idx]:
+                category = result['category']
+                p = result['p']
+                d_mu = result['d_mu']
+                d_min = result['d_min']
+                
+                # 计算置信度评分
+                score = self.label_validator._compute_confidence_score(p, d_min, d_mu)
+                
+                # 做出决策
+                if score >= self.label_validator.thresholds['high']:
+                    decision = "accept"
+                elif score <= self.label_validator.thresholds['low']:
+                    decision = "reject"
+                else:
+                    decision = "review"
+                
+                category_results.append({
+                    'category': category,
+                    'decision': decision,
+                    'score': float(score),
+                    'metrics': {
+                        'knn_consistency': float(p),
+                        'nearest_distance_normalized': float(d_min),
+                        'class_distance_normalized': float(d_mu)
+                    },
+                    'error': None
+                })
+                
+                # 综合决策逻辑
+                if decision == 'reject':
+                    final_decision = 'reject'
+                elif decision == 'review' and final_decision != 'reject':
+                    final_decision = 'review'
+                
+                overall_score += score
+            
+            # 计算平均分数
+            if category_results:
+                overall_score = overall_score / len(category_results)
+            
+            batch_results.append({
+                'image_id': image_id,
+                'image_path': item.get('image_path', ''),
+                'decision': final_decision,
+                'score': overall_score,
+                'categories': category_results,
+                'total_categories': len(categories),
+                'validated_categories': len(category_results),
+                'error': None
+            })
         
         return batch_results
     

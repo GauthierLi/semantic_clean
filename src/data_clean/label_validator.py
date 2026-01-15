@@ -109,6 +109,188 @@ class LabelValidator:
         
         logger.info(f"类统计信息预加载完成，缓存包含 {len(self._class_stats_cache)} 个类别")
     
+    def batch_compute_knn_consistency(
+        self, 
+        query_features: List[np.ndarray], 
+        labels: List[str]
+    ) -> List[float]:
+        """批量计算kNN标签一致性比率，优化百万级样本性能
+        
+        Args:
+            query_features: 特征向量列表
+            labels: 对应的标签列表
+            
+        Returns:
+            一致性比率列表
+        """
+        if not query_features or not labels:
+            return []
+        
+        if len(query_features) != len(labels):
+            raise ValueError("特征向量数量与标签数量不匹配")
+        
+        # 按类别分组
+        category_to_indices = {}
+        for idx, label in enumerate(labels):
+            if label not in category_to_indices:
+                category_to_indices[label] = []
+            category_to_indices[label].append(idx)
+        
+        # 初始化结果列表
+        results = [0.0] * len(query_features)
+        
+        # 对每个类别批量查询
+        for category, indices in category_to_indices.items():
+            # 提取该类别的所有查询特征
+            category_features = [query_features[i] for i in indices]
+            
+            try:
+                # 批量查询kNN
+                batch_results = self.db_manager.query_by_feature_batch(
+                    query_features=category_features,
+                    n_results=self.k
+                )
+                
+                # 计算一致性
+                # batch_results['metadatas'][i] 是第i个查询的k个最近邻的元数据列表
+                for i in range(len(batch_results['metadatas'])):
+                    if not batch_results['metadatas'][i] or len(batch_results['metadatas'][i]) == 0:
+                        results[indices[i]] = 0.0
+                        continue
+                    
+                    same_label_count = 0
+                    for metadata in batch_results['metadatas'][i]:
+                        if metadata.get(f'is_{category}', False):
+                            same_label_count += 1
+                    
+                    results[indices[i]] = same_label_count / len(batch_results['metadatas'][i])
+                    
+            except Exception as e:
+                logger.error(f"批量计算kNN一致性失败，类别 {category}: {e}")
+                for idx in indices:
+                    results[idx] = 0.0
+        
+        return results
+    
+    def batch_compute_class_mean_distance(
+        self,
+        query_features: List[np.ndarray],
+        labels: List[str]
+    ) -> List[float]:
+        """批量计算类均值距离，优化百万级样本性能
+        
+        Args:
+            query_features: 特征向量列表
+            labels: 对应的标签列表
+            
+        Returns:
+            归一化距离列表
+        """
+        if not query_features or not labels:
+            return []
+        
+        if len(query_features) != len(labels):
+            raise ValueError("特征向量数量与标签数量不匹配")
+        
+        results = []
+        
+        for query_feature, label in zip(query_features, labels):
+            try:
+                # 优先从缓存读取
+                if label in self._class_stats_cache:
+                    class_stats = self._class_stats_cache[label]
+                else:
+                    # 缓存未命中时查询数据库并缓存
+                    class_stats = self.db_manager.get_class_statistics(label)
+                    self._class_stats_cache[label] = class_stats
+                
+                if class_stats['count'] == 0:
+                    results.append(1.0)
+                elif class_stats['count'] < 2:
+                    results.append(1.0)
+                else:
+                    class_mean = class_stats['mean']
+                    mean_intra_distance = class_stats['mean_intra_distance']
+                    
+                    # 计算查询特征到类均值的距离
+                    distance_to_mean = np.linalg.norm(query_feature - class_mean)
+                    
+                    # 归一化距离
+                    if mean_intra_distance > 0:
+                        normalized_distance = distance_to_mean / mean_intra_distance
+                        results.append(min(normalized_distance, 3.0))
+                    else:
+                        results.append(1.0)
+                        
+            except Exception as e:
+                logger.error(f"计算类均值距离失败，标签 {label}: {e}")
+                results.append(1.0)
+        
+        return results
+    
+    def batch_compute_nearest_same_class_distance(
+        self,
+        query_features: List[np.ndarray],
+        labels: List[str]
+    ) -> List[float]:
+        """批量计算最近同类距离，优化百万级样本性能
+        
+        Args:
+            query_features: 特征向量列表
+            labels: 对应的标签列表
+            
+        Returns:
+            归一化距离列表
+        """
+        if not query_features or not labels:
+            return []
+        
+        if len(query_features) != len(labels):
+            raise ValueError("特征向量数量与标签数量不匹配")
+        
+        # 按类别分组
+        category_to_indices = {}
+        for idx, label in enumerate(labels):
+            if label not in category_to_indices:
+                category_to_indices[label] = []
+            category_to_indices[label].append(idx)
+        
+        # 初始化结果列表
+        results = [1.0] * len(query_features)
+        
+        # 对每个类别批量查询
+        for category, indices in category_to_indices.items():
+            # 提取该类别的所有查询特征
+            category_features = [query_features[i] for i in indices]
+            
+            try:
+                # 批量查询同类别的最近邻
+                batch_results = self.db_manager.query_by_feature_batch(
+                    query_features=category_features,
+                    n_results=1,
+                    where={f'is_{category}': True}
+                )
+                
+                # 计算距离
+                # batch_results['distances'][i][j] 是第i个查询的第j个最近邻的距离
+                for i in range(len(batch_results['distances'])):
+                    if not batch_results['metadatas'][i] or len(batch_results['metadatas'][i]) == 0 or not batch_results['distances'][i] or len(batch_results['distances'][i]) == 0:
+                        results[indices[i]] = 1.0
+                        continue
+                    
+                    min_distance = batch_results['distances'][i][0]
+                    
+                    # 使用固定阈值进行归一化
+                    normalized_distance = min(min_distance / 0.5, 1.0)
+                    results[indices[i]] = normalized_distance
+                    
+            except Exception as e:
+                logger.error(f"批量计算最近同类距离失败，类别 {category}: {e}")
+                for idx in indices:
+                    results[idx] = 1.0
+        
+        return results
+    
     def _compute_class_mean_distance(self, query_feature: np.ndarray, label: str) -> float:
         """计算类均值距离d_mu，优先使用缓存数据"""
         try:
