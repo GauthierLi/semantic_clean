@@ -140,43 +140,39 @@ class MultiGPUFeatureExtractor:
 
     def _distribute_images_to_gpus(self, images: List[np.ndarray]) -> Dict[str, List[np.ndarray]]:
         """智能分配图片到不同GPU"""
-        if len(images) <= self.batch_per_gpu:
-            # 如果图片数量少，只使用第一个GPU
+        num_images = len(images)
+        
+        # 如果图片数量少，只使用第一个GPU
+        if num_images <= self.batch_per_gpu:
+            logger.info(f"Only {num_images} images, using single GPU: {self.device_list[0]}")
             return {self.device_list[0]: images}
         
-        # 获取各GPU内存使用情况
-        gpu_memory_info = self._get_gpu_memory_info()
+        # 计算每个GPU应该处理的图像数量
+        images_per_gpu = max(1, num_images // self.num_gpus)
         
-        # 计算分配比例
-        total_memory = sum(gpu_memory_info.values())
-        allocations = {}
-        
-        for device, memory in gpu_memory_info.items():
-            ratio = memory / total_memory
-            batch_count = max(1, int(len(images) * ratio))
-            allocations[device] = batch_count
-        
-        # 确保所有图片都被分配
-        allocated_sum = sum(allocations.values())
-        if allocated_sum < len(images):
-            remaining = len(images) - allocated_sum
-            # 将剩余的图片分配给内存最多的GPU
-            best_device = max(gpu_memory_info.items(), key=lambda x: x[1])[0]
-            allocations[best_device] += remaining
-        
-        # 分割图片
         result = {}
         start_idx = 0
         
-        for device, count in allocations.items():
-            end_idx = min(start_idx + count, len(images))
+        for i, device in enumerate(self.device_list):
+            # 最后一个GPU处理剩余的所有图像
+            if i == self.num_gpus - 1:
+                end_idx = num_images
+            else:
+                end_idx = min(start_idx + images_per_gpu, num_images)
+            
             result[device] = images[start_idx:end_idx]
+            logger.info(f"Allocated {len(result[device])} images to {device}")
             start_idx = end_idx
             
-            if start_idx >= len(images):
+            if start_idx >= num_images:
                 break
         
-        logger.info(f"Distributed {len(images)} images across {len(result)} GPUs: {list(result.keys())}")
+        # 验证所有图像都被分配
+        total_allocated = sum(len(batch) for batch in result.values())
+        if total_allocated != num_images:
+            raise RuntimeError(f"Image allocation mismatch: expected {num_images}, got {total_allocated}")
+        
+        logger.info(f"Distributed {num_images} images across {len(result)} GPUs")
         return result
 
     def _extract_on_gpu(self, device: str, images: List[np.ndarray]) -> torch.Tensor:
@@ -250,6 +246,9 @@ class MultiGPUFeatureExtractor:
         if not images:
             return torch.empty(0, 0)
         
+        num_images = len(images)
+        logger.info(f"Starting multi-GPU feature extraction for {num_images} images")
+        
         if self.num_gpus == 1 or self.device_list[0] == 'cpu':
             # 单GPU或CPU模式，直接使用标准方法
             logger.info("Using single GPU/CPU mode")
@@ -257,6 +256,10 @@ class MultiGPUFeatureExtractor:
         
         # 分配图片到不同GPU
         gpu_batches = self._distribute_images_to_gpus(images)
+        
+        # 记录每个GPU的batch大小
+        for device, batch_images in gpu_batches.items():
+            logger.info(f"GPU {device} will process {len(batch_images)} images")
         
         # 并行处理各GPU的batch
         results = []
@@ -267,6 +270,8 @@ class MultiGPUFeatureExtractor:
                 for device, batch_images in gpu_batches.items()
                 if batch_images  # 只处理非空batch
             }
+            
+            logger.info(f"Submitted {len(future_to_device)} tasks to thread pool")
             
             # 收集结果
             for future in as_completed(future_to_device):
@@ -293,6 +298,14 @@ class MultiGPUFeatureExtractor:
         # 按原始顺序合并结果
         sorted_results = sorted(results, key=lambda x: list(gpu_batches.keys()).index(x[0]))
         final_features = torch.cat([result for _, result in sorted_results], dim=0)
+        
+        # 验证结果数量
+        if final_features.shape[0] != num_images:
+            raise RuntimeError(
+                f"Feature count mismatch: expected {num_images}, got {final_features.shape[0]}. "
+                f"GPU batches: {[(d, len(b)) for d, b in gpu_batches.items()]}, "
+                f"Results: {[(d, r.shape[0]) for d, r in results]}"
+            )
         
         logger.info(f"Multi-GPU processing completed. Final feature shape: {final_features.shape}")
         return final_features

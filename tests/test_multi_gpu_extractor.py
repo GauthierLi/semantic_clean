@@ -242,6 +242,156 @@ def test_performance_comparison():
         print(f"✗ 性能测试失败: {e}")
         return False
 
+def test_result_count_validation():
+    """测试结果数量验证逻辑（修复后的新增测试）"""
+    print("\n=== 测试结果数量验证逻辑 ===")
+    
+    try:
+        extractor = MultiGPUFeatureExtractor()
+        
+        # 测试不同数量的图片
+        test_cases = [10, 25, 50, 100]
+        
+        for num_images in test_cases:
+            test_images = create_test_images(num_images)
+            
+            # 提取特征
+            features = extractor.extract_features_batch_multi_gpu(test_images)
+            
+            # 验证结果数量
+            if features.shape[0] != num_images:
+                print(f"✗ 结果数量不匹配: 期望{num_images}, 实际{features.shape[0]}")
+                return False
+            
+            print(f"✓ 图片数量 {num_images}: 结果验证通过，特征形状 {features.shape}")
+        
+        print("✓ 结果数量验证测试通过")
+        return True
+        
+    except RuntimeError as e:
+        if "Feature count mismatch" in str(e):
+            print(f"✗ 结果数量验证失败: {e}")
+            return False
+        raise
+    except Exception as e:
+        print(f"✗ 结果数量验证测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_uniform_distribution():
+    """测试均匀分配逻辑（修复后的新增测试）"""
+    print("\n=== 测试均匀分配逻辑 ===")
+    
+    try:
+        extractor = MultiGPUFeatureExtractor()
+        
+        # 测试较大数量的图片分配
+        num_images = 100
+        test_images = create_test_images(num_images)
+        
+        distribution = extractor._distribute_images_to_gpus(test_images)
+        
+        # 验证所有图片都被分配
+        total_allocated = sum(len(batch) for batch in distribution.values())
+        if total_allocated != num_images:
+            print(f"✗ 分配不匹配: 期望{num_images}, 实际{total_allocated}")
+            return False
+        
+        # 验证分配相对均匀
+        batch_sizes = [len(batch) for batch in distribution.values()]
+        avg_size = num_images / len(distribution)
+        
+        for i, size in enumerate(batch_sizes):
+            # 允许最后一个GPU处理剩余的图片，所以可能比平均值大
+            if i < len(batch_sizes) - 1:
+                if abs(size - avg_size) > 2:  # 允许2个图片的差异
+                    print(f"✗ GPU {i} 分配不均匀: {size} vs 平均 {avg_size:.1f}")
+                    return False
+        
+        print(f"✓ 均匀分配测试通过: {batch_sizes}")
+        return True
+        
+    except Exception as e:
+        print(f"✗ 均匀分配测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_detailed_logging():
+    """测试详细日志输出（修复后的新增测试）"""
+    print("\n=== 测试详细日志输出 ===")
+    
+    try:
+        import logging
+        import io
+        
+        # 设置日志捕获 - 使用根logger以捕获所有日志
+        log_capture = io.StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.INFO)
+        
+        # 添加到根logger
+        root_logger = logging.getLogger()
+        original_handlers = root_logger.handlers.copy()
+        root_logger.handlers = [handler]
+        root_logger.setLevel(logging.INFO)
+        
+        extractor = MultiGPUFeatureExtractor()
+        test_images = create_test_images(50)
+        
+        # 提取特征
+        features = extractor.extract_features_batch_multi_gpu(test_images)
+        
+        # 获取日志输出
+        log_output = log_capture.getvalue()
+        
+        # 根据GPU数量验证不同的日志
+        if extractor.num_gpus > 1:
+            # 多GPU模式
+            required_logs = [
+                "Starting multi-GPU feature extraction",
+                "Allocated",
+                "images to",
+                "will process",
+                "Submitted",
+                "tasks to thread pool",
+                "Completed batch processing",
+                "Multi-GPU processing completed"
+            ]
+        else:
+            # 单GPU模式
+            required_logs = [
+                "Starting multi-GPU feature extraction",
+                "Using single GPU/CPU mode"
+            ]
+        
+        missing_logs = []
+        for required_log in required_logs:
+            if required_log not in log_output:
+                missing_logs.append(required_log)
+        
+        if missing_logs:
+            print(f"✗ 缺少关键日志: {missing_logs}")
+            if len(log_output) > 0:
+                print(f"日志输出: {log_output[:500]}")
+            else:
+                print("日志输出为空")
+            return False
+        
+        print("✓ 详细日志输出测试通过")
+        return True
+        
+    except Exception as e:
+        print(f"✗ 详细日志测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        # 恢复原始日志处理器
+        if 'root_logger' in locals():
+            root_logger.handlers = original_handlers
+
 def main():
     """运行所有测试"""
     print("开始多GPU特征提取器测试...\n")
@@ -252,7 +402,10 @@ def main():
         test_gpu_memory_allocation,
         test_batch_distribution,
         test_error_handling,
-        test_performance_comparison
+        test_performance_comparison,
+        test_result_count_validation,  # 新增测试
+        test_uniform_distribution,    # 新增测试
+        test_detailed_logging          # 新增测试
     ]
     
     passed = 0
