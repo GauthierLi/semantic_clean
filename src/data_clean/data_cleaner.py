@@ -2,10 +2,13 @@ import os
 import cv2
 import json
 import numpy as np
+import logging
 
 from typing import Dict, List
 from src.image_serialize import ImageSerializer
 from .label_validator import LabelValidator
+
+logger = logging.getLogger(__name__)
 
 
 class DataCleaner:
@@ -102,18 +105,20 @@ class DataCleaner:
         categories = image_data.get('category', [])
         
         if not image_path:
+            logger.error(f"缺少图像路径 - Image ID: {image_id}, Path: {image_path}, Error: '缺少图像路径'")
             return {
                 'image_id': image_id,
                 'image_path': image_path,
-                'decision': 'reject',
+                'decision': 'drop',
                 'error': '缺少图像路径'
             }
         
         if not os.path.exists(image_path):
+            logger.error(f"图像文件不存在 - Image ID: {image_id}, Path: {image_path}, Error: '图像文件不存在'")
             return {
                 'image_id': image_id,
                 'image_path': image_path,
-                'decision': 'reject',
+                'decision': 'drop',
                 'error': '图像文件不存在'
             }
         
@@ -132,6 +137,7 @@ class DataCleaner:
             query_feature = query_feature.cpu().numpy().flatten()
             
         except Exception as e:
+            logger.error(f"特征提取失败 - Image ID: {image_id}, Path: {image_path}, Error: {str(e)}")
             return {
                 'image_id': image_id,
                 'image_path': image_path,
@@ -147,7 +153,7 @@ class DataCleaner:
                 return {
                     'image_id': image_id,
                     'image_path': image_path,
-                    'decision': 'review',
+                    'decision': 'accept',
                     'total_categories': len(categories),
                     'validated_categories': 0,
                     'categories': [],
@@ -238,6 +244,7 @@ class DataCleaner:
             }
             
         except Exception as e:
+            logger.error(f"标签验证失败 - Label: {label}, Query Feature Shape: {query_feature.shape}, Error: {str(e)}")
             return {
                 'score': -1.0,
                 'decision': 'reject',
