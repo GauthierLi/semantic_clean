@@ -1,12 +1,16 @@
 import json
 import chromadb
 import numpy as np
+import os
 
 from typing import List, Dict, Optional
 
 class ChromaDBManager:
     def __init__(self, db_path: str = "chroma_db"):
         """Initialize ChromaDB client and collection"""
+        # 禁用 ChromaDB 遥测功能，避免 SSL 连接错误
+        os.environ['ANONYMIZED_TELEMETRY'] = 'False'
+        
         self.client = chromadb.PersistentClient(path=db_path)
         self.collection = self.client.get_or_create_collection(name="image_features")
 
