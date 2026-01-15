@@ -1,8 +1,11 @@
 import cv2
 import numpy as np
+import logging
 
 from typing import Dict, List, Optional
 from src.image_serialize import ChromaDBManager
+
+logger = logging.getLogger(__name__)
 
 
 class LabelValidator:
@@ -12,6 +15,9 @@ class LabelValidator:
         self.k = 20  # kNN参数
         self.weights = {'w1': 1.0, 'w2': 0.5, 'w3': 0.5}
         self.thresholds = {'high': 0.4, 'low': -0.4}
+        
+        # 类统计信息缓存，避免重复查询数据库
+        self._class_stats_cache: Dict[str, Dict] = {}
     
     def validate_label(self, image_path: str, label: str) -> Dict:
         """验证单个图像标签，返回评分和决策"""
@@ -81,11 +87,38 @@ class LabelValidator:
         except Exception:
             return 0.0
     
+    def preload_class_statistics(self, categories: List[str]):
+        """预加载指定类别的统计信息到缓存
+        
+        Args:
+            categories: 需要预加载的类别列表
+        """
+        if not categories:
+            return
+        
+        logger.info(f"开始预加载 {len(categories)} 个类别的统计信息")
+        
+        for category in categories:
+            if category not in self._class_stats_cache:
+                try:
+                    stats = self.db_manager.get_class_statistics(category)
+                    self._class_stats_cache[category] = stats
+                    logger.debug(f"已缓存类别 {category} 的统计信息，样本数: {stats['count']}")
+                except Exception as e:
+                    logger.warning(f"预加载类别 {category} 统计信息失败: {e}")
+        
+        logger.info(f"类统计信息预加载完成，缓存包含 {len(self._class_stats_cache)} 个类别")
+    
     def _compute_class_mean_distance(self, query_feature: np.ndarray, label: str) -> float:
-        """计算类均值距离d_mu，基于数据库中的类统计信息"""
+        """计算类均值距离d_mu，优先使用缓存数据"""
         try:
-            # 获取类统计信息
-            class_stats = self.db_manager.get_class_statistics(label)
+            # 优先从缓存读取
+            if label in self._class_stats_cache:
+                class_stats = self._class_stats_cache[label]
+            else:
+                # 缓存未命中时查询数据库并缓存
+                class_stats = self.db_manager.get_class_statistics(label)
+                self._class_stats_cache[label] = class_stats
             
             if class_stats['count'] == 0:
                 return 1.0  # 如果没有同类数据，返回最大距离
@@ -108,8 +141,13 @@ class LabelValidator:
                 return 1.0
                 
         except Exception as e:
-            print(f"计算类均值距离时发生错误: {str(e)}")
+            logger.error(f"计算类均值距离时发生错误: {str(e)}")
             return 1.0
+    
+    def clear_cache(self):
+        """清除类统计信息缓存"""
+        self._class_stats_cache.clear()
+        logger.info("类统计信息缓存已清除")
     
     def _compute_nearest_same_class_distance(self, query_feature: np.ndarray, label: str) -> float:
         """计算最近同类距离d_min，利用ChromaDB的精确查询"""

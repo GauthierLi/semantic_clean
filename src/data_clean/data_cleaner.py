@@ -138,6 +138,21 @@ class DataCleaner:
         # 先批量提取特征
         features_dict = self._extract_features_batch(batch_data)
         
+        # 收集本批次所有需要验证的类别并预加载统计信息
+        all_categories = set()
+        for item in batch_data:
+            categories = item.get('category', [])
+            if self.validate_categories:
+                # 只收集配置的验证类别
+                categories_to_validate = [cat for cat in categories if cat in self.validate_categories]
+            else:
+                categories_to_validate = categories
+            all_categories.update(categories_to_validate)
+        
+        # 预加载类统计信息以优化性能
+        if all_categories:
+            self.label_validator.preload_class_statistics(list(all_categories))
+        
         batch_results = []
         
         for item in batch_data:
