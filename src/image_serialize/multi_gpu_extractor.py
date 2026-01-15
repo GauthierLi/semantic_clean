@@ -106,7 +106,9 @@ class MultiGPUFeatureExtractor:
         if model_path is None:
             model_path = os.path.join(os.getcwd(), 'dinov3_vitb16_pretrain.pth')
             
-        return torch.hub.load(dino3_path, 'dinov3_vitb16', source='local', weights=model_path)
+        model = torch.hub.load(dino3_path, 'dinov3_vitb16', source='local', weights=model_path)
+        model.eval()  # 设置为评估模式，禁用dropout等训练特定操作
+        return model
 
     def _make_transform(self, resize_size=256):
         """创建图像变换管道"""

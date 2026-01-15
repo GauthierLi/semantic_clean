@@ -38,7 +38,19 @@ class DINOv3FeatureExtractor:
         if model_path is None:
             model_path = os.path.join(os.getcwd(), 'dinov3_vitb16_pretrain.pth')
             
-        return torch.hub.load(dino3_path, 'dinov3_vitb16', source='local', weights=model_path)
+        model = torch.hub.load(dino3_path, 'dinov3_vitb16', source='local', weights=model_path)
+        
+        # 将模型移动到GPU（如果可用）
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+            model = model.to(device)
+            model.eval()  # 设置为评估模式
+            print(f"Model moved to GPU: {device}")
+        else:
+            print("CUDA not available, using CPU")
+            model.eval()
+        
+        return model
 
     def extract_features_batch(self, images, batch_size=None):
         """批量提取特征，支持多张图片同时处理
@@ -56,10 +68,14 @@ class DINOv3FeatureExtractor:
         # 批量大小验证
         if batch_size <= 0:
             raise ValueError(f"batch_size must be positive, got {batch_size}")
-            
+        
+        # 确定设备
+        device = next(self.model.parameters()).device
+        
         # 如果图片数量小于等于批量大小，直接处理
         if len(images) <= batch_size:
             batch_tensors = torch.stack([self.transform(img) for img in images])
+            batch_tensors = batch_tensors.to(device)
             with torch.no_grad():
                 features = self.model.forward_features(batch_tensors)
             return torch.nn.functional.normalize(features['x_norm_clstoken'], dim=-1)
@@ -70,6 +86,7 @@ class DINOv3FeatureExtractor:
             batch_images = images[i:i+batch_size]
             try:
                 batch_tensors = torch.stack([self.transform(img) for img in batch_images])
+                batch_tensors = batch_tensors.to(device)
                 with torch.no_grad():
                     batch_features = self.model.forward_features(batch_tensors)
                 normalized_features = torch.nn.functional.normalize(batch_features['x_norm_clstoken'], dim=-1)

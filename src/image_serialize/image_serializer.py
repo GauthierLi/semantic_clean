@@ -23,7 +23,8 @@ class ImageSerializer:
             gpus: GPU设备列表，如[0, 1, 2]或None表示自动检测
             batch_per_gpu: 每个GPU的批量大小
         """
-        if use_multi_gpu and torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        # 优先使用多GPU模式（如果启用且有GPU）
+        if use_multi_gpu and torch.cuda.is_available():
             try:
                 self.feature_extractor = MultiGPUFeatureExtractor(
                     model_path=model_path, 
@@ -31,7 +32,8 @@ class ImageSerializer:
                     batch_per_gpu=batch_per_gpu
                 )
                 self.use_multi_gpu = True
-                print(f"Multi-GPU mode enabled with {torch.cuda.device_count()} GPUs")
+                num_gpus = len(self.feature_extractor.device_list)
+                print(f"Multi-GPU mode enabled with {num_gpus} GPU(s): {self.feature_extractor.device_list}")
             except Exception as e:
                 print(f"Failed to initialize multi-GPU mode: {e}")
                 print("Falling back to single-GPU mode")

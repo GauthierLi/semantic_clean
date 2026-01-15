@@ -3,6 +3,7 @@ import cv2
 import json
 import numpy as np
 import logging
+from tqdm import tqdm
 
 from typing import Dict, List
 from src.image_serialize import ImageSerializer
@@ -50,14 +51,14 @@ class DataCleaner:
         results = []
         processed_count = 0
         
-        print(f"开始处理 {total_count} 个图像数据（批处理大小: {batch_size}）...")
-        
-        # 分批处理数据
-        for batch_start in range(0, total_count, batch_size):
+        # 分批处理数据，使用 tqdm 显示进度
+        num_batches = (total_count + batch_size - 1) // batch_size
+        for batch_start in tqdm(range(0, total_count, batch_size), 
+                                total=num_batches, 
+                                desc=f"处理 {total_count} 个图像",
+                                unit="batch"):
             batch_end = min(batch_start + batch_size, total_count)
             batch_data = target_data[batch_start:batch_end]
-            
-            print(f"处理批次 {batch_start//batch_size + 1}: 图像 {batch_start+1}-{batch_end}")
             
             batch_results = self._process_batch(batch_data)
             results.extend(batch_results)
@@ -66,9 +67,6 @@ class DataCleaner:
             # 释放内存
             del batch_data
             del batch_results
-            
-            if processed_count % 100 == 0 or batch_end >= total_count:
-                print(f"已处理 {processed_count}/{total_count} 个图像")
         
         # 保存结果
         self._save_results(results, output_json)
