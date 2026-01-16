@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交互式图片筛选系统</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=2">
+</head>
+<body>
+    <!-- 固定顶部控制面板 -->
+    <div class="control-panel" id="controlPanel">
+        <div class="panel-content">
+            <div class="panel-section">
+                <div class="panel-header">
+                    <h2>🖼️ 交互式图片筛选系统</h2>
+                    <button id="toggleControlsBtn" class="btn btn-secondary toggle-controls-btn" title="切换控制面板显示">
+                        <span class="toggle-icon">🔽</span>
+                        <span class="toggle-text">收起</span>
+                    </button>
+                </div>
+                <div class="file-input-section">
+                    <input type="text" id="filePath" placeholder="请输入 edge_cases_result.json 文件路径" class="file-input">
+                    <button id="loadFileBtn" class="btn btn-primary">📂 加载文件</button>
+                </div>
+            </div>
+
+            <div class="panel-section" id="categorySection" style="display: none;">
+                <!-- 仅保留操作按钮的简化模式 -->
+                <div id="minimalActionControls" class="minimal-action-controls" style="display: none;">
+                    <div class="action-controls">
+                        <button id="saveBtnMinimal" class="btn btn-success" disabled>💾 保存更改</button>
+                        <button id="downloadBtnMinimal" class="btn btn-info" disabled>📥 下载结果</button>
+                        <button id="clearSelectionBtnMinimal" class="btn btn-warning" disabled>🗑️ 清空选择</button>
+                    </div>
+                </div>
+                
+                <!-- 完整的控制面板 -->
+                <div id="fullControls" class="full-controls">
+                <!-- 第一行：选择类别和选择模式 -->
+                <div class="top-controls-row">
+                    <div class="category-controls">
+                        <label for="categorySelect">选择类别：</label>
+                        <select id="categorySelect" class="category-select">
+                            <option value="all">所有类别</option>
+                        </select>
+                    </div>
+                    
+                    <div class="decision-controls">
+                        <label for="decisionSelect">决策状态：</label>
+                        <select id="decisionSelect" class="decision-select">
+                            <option value="review">待审核</option>
+                            <option value="accept">已接受</option>
+                            <option value="reject">已拒绝</option>
+                        </select>
+                    </div>
+                    
+                    <div class="selection-controls">
+                        <label>选择模式：</label>
+                        <div class="radio-buttons">
+                            <div class="radio-group">
+                                <input type="radio" id="positiveMode" name="selectionMode" value="positive" checked>
+                                <label for="positiveMode" class="radio-label">
+                                    <span class="radio-button"></span>
+                                    <span class="radio-text">正选模式</span>
+                                </label>
+                            </div>
+                            <div class="radio-group">
+                                <input type="radio" id="negativeMode" name="selectionMode" value="negative">
+                                <label for="negativeMode" class="radio-label">
+                                    <span class="radio-button"></span>
+                                    <span class="radio-text">反选模式</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <span class="sample-count" id="sampleCount">共 0 个样本</span>
+                </div>
+
+                <!-- 第二行：网格缩放和操作按钮 -->
+                <div class="grid-zoom-controls">
+                    <div class="controls-row">
+                        <div class="slider-container">
+                            <label>网格缩放：</label>
+                            <div class="zoom-slider-wrapper">
+                                <input type="range" id="gridZoomSlider" class="zoom-slider" min="1" max="5" value="3" step="1">
+                                <div class="zoom-slider-labels">
+                                    <span>1</span>
+                                    <span>2</span>
+                                    <span>3</span>
+                                    <span>4</span>
+                                    <span>5</span>
+                                </div>
+                            </div>
+                            <span id="gridZoomLevelDisplay" class="zoom-level-display">默认</span>
+                        </div>
+                        
+                        <div class="action-controls">
+                            <button id="saveBtn" class="btn btn-success" disabled>💾 保存更改</button>
+                            <button id="downloadBtn" class="btn btn-info" disabled>📥 下载结果</button>
+                            <button id="clearSelectionBtn" class="btn btn-warning" disabled>🗑️ 清空选择</button>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 状态浮窗 -->
+    <div class="status-toast" id="statusBar">
+        <div class="toast-content">
+            <span class="toast-icon">ℹ️</span>
+            <span class="toast-message" id="statusText">请加载文件开始</span>
+            <div class="progress-bar" id="progressBar" style="display: none;">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主要内容区域 -->
+    <div class="main-container">
+        <!-- 图片展示区域 -->
+        <div class="image-grid" id="imageGrid">
+            <div class="empty-state" id="emptyState">
+                <div class="empty-icon">📁</div>
+                <h3>欢迎使用交互式图片筛选系统</h3>
+                <p>请输入 edge_cases_result.json 文件路径开始使用</p>
+            </div>
+        </div>
+
+        <!-- 分页控制 -->
+        <div class="pagination" id="pagination" style="display: none;">
+            <button id="prevPageBtn" class="btn btn-secondary" disabled>⬅️ 上一页</button>
+            <span class="page-info" id="pageInfo">第 1 页，共 1 页</span>
+            <button id="nextPageBtn" class="btn btn-secondary" disabled>下一页 ➡️</button>
+            <div class="per-page-control">
+                <label for="perPageSelect">每页显示：</label>
+                <select id="perPageSelect" class="per-page-select">
+                    <option value="100" selected>100</option>
+                    <option value="500">500</option>
+                    <option value="1000">1000</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图片放大模态框 -->
+    <div class="image-modal" id="imageModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">图片预览</h3>
+                <button class="modal-close" id="modalClose">✕</button>
+            </div>
+            <div class="modal-body">
+                <img id="modalImage" src="" alt="预览图片">
+                <div class="modal-info">
+                    <p id="modalPath"></p>
+                    <p id="modalCategories"></p>
+                    <div class="modal-controls">
+                        <!-- 缩放控制 -->
+                        <div class="zoom-controls">
+                            <button id="zoomOutBtn" class="btn btn-secondary" title="缩小 (-)">➖</button>
+                            <span id="zoomLevelDisplay" class="zoom-level">3/5</span>
+                            <button id="zoomInBtn" class="btn btn-secondary" title="放大 (+)">➕</button>
+                        </div>
+                        
+                        <!-- 原有控制按钮 -->
+                        <button id="modalSelectBtn" class="btn btn-primary">选择/取消选择</button>
+                        <button id="modalPrevBtn" class="btn btn-secondary">⬅️ 上一张</button>
+                        <button id="modalNextBtn" class="btn btn-secondary">下一张 ➡️</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 错误提示框 -->
+    <div class="error-toast" id="errorToast" style="display: none;">
+        <div class="toast-content">
+            <span class="toast-icon">❌</span>
+            <span class="toast-message" id="errorMessage"></span>
+            <button class="toast-close" id="errorToastClose">✕</button>
+        </div>
+    </div>
+
+    <!-- 成功提示框 -->
+    <div class="success-toast" id="successToast" style="display: none;">
+        <div class="toast-content">
+            <span class="toast-icon">✅</span>
+            <span class="toast-message" id="successMessage"></span>
+            <button class="toast-close" id="successToastClose">✕</button>
+        </div>
+    </div>
+
+    <!-- 确认对话框 -->
+    <div class="confirm-dialog" id="confirmDialog" style="display: none;">
+        <div class="dialog-content">
+            <h3 id="confirmTitle">确认操作</h3>
+            <p id="confirmMessage">确定要执行此操作吗？</p>
+            <div class="dialog-actions">
+                <button id="confirmBtn" class="btn btn-primary">确认</button>
+                <button id="cancelBtn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js?v=2"></script>
+    <script src="/static/js/performance.js"></script>
+</body>
+</html>

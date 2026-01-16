@@ -1,0 +1,18 @@
+syntax = "proto2";
+
+package demoproto;
+
+// 图片类别枚举（可以自己添加更多）
+enum ImageCategory {
+    UNKNOWN = 0;      // 默认类别
+    CAT = 1;          // 示例：猫
+    DOG = 2;          // 示例：狗
+}
+
+// 图片数据结构
+message ImageData {
+    optional string id = 1;                      // 图片ID
+    optional string image_path = 2;                    // 图片路径
+    repeated ImageCategory category = 3 [default = UNKNOWN];  // 默认类别
+    repeated float features = 4;                 // 图片特征向量（786维）
+}
