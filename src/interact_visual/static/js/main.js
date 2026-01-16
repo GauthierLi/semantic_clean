@@ -11,6 +11,7 @@ class ImageFilterApp {
             reviewSamples: [],
             categories: [],
             currentCategory: 'all',
+            currentDecision: 'review',  // 当前决策状态：review | accept | reject
             currentPage: 1,
             perPage: 20,
             totalCount: 0,
@@ -23,8 +24,7 @@ class ImageFilterApp {
             isCtrlDragging: false,
             zoomLevel: 3,  // 缩放级别：1-5，3为默认
             zoomScales: [0.5, 0.75, 1.0, 1.5, 2.0],  // 各级别对应的缩放比例
-            gridZoomLevel: 3,  // 网格缩放级别：1-5，3为默认
-            gridZoomScales: [0.5, 0.75, 1.0, 1.5, 2.0]  // 网格各级别对应的缩放比例
+            gridZoomLevel: 3  // 网格缩放级别：1-5，3为默认
         };
 
         // DOM元素引用
@@ -41,9 +41,8 @@ class ImageFilterApp {
         this.cacheElements();
         this.bindEvents();
         this.loadInitialState();
-        
-        // 初始化位置计算
-        setTimeout(() => this.updateMainContainerPosition(), 100);
+        // 初始化主容器的顶部间距
+        setTimeout(() => this.updateMainContainerPadding(), 100);
     }
 
     /**
@@ -54,30 +53,15 @@ class ImageFilterApp {
             // 输入控件
             filePath: document.getElementById('filePath'),
             loadFileBtn: document.getElementById('loadFileBtn'),
-            
-            // 折叠控制
-            toggleControlsBtn: document.getElementById('toggleControlsBtn'),
-            
-            // 控制面板区域
             categorySelect: document.getElementById('categorySelect'),
+            decisionSelect: document.getElementById('decisionSelect'),
             positiveModeBtn: document.getElementById('positiveMode'),
             negativeModeBtn: document.getElementById('negativeMode'),
-            positiveModeLabel: document.querySelector('label[for="positiveMode"]'),
-            negativeModeLabel: document.querySelector('label[for="negativeMode"]'),
-            fullControls: document.getElementById('fullControls'),
-            minimalActionControls: document.getElementById('minimalActionControls'),
-            controlPanel: document.getElementById('controlPanel'),
-            fileInputSection: document.querySelector('.file-input-section'),
             
-            // 操作按钮 - 完整控制面板版本
+            // 操作按钮
             saveBtn: document.getElementById('saveBtn'),
             downloadBtn: document.getElementById('downloadBtn'),
             clearSelectionBtn: document.getElementById('clearSelectionBtn'),
-            
-            // 操作按钮 - 简化控制面板版本
-            saveBtnMinimal: document.getElementById('saveBtnMinimal'),
-            downloadBtnMinimal: document.getElementById('downloadBtnMinimal'),
-            clearSelectionBtnMinimal: document.getElementById('clearSelectionBtnMinimal'),
             
             // 显示区域
             categorySection: document.getElementById('categorySection'),
@@ -113,10 +97,6 @@ class ImageFilterApp {
             zoomOutBtn: document.getElementById('zoomOutBtn'),
             zoomLevelDisplay: document.getElementById('zoomLevelDisplay'),
             
-            // 网格缩放控制 - 滑块版本
-            gridZoomSlider: document.getElementById('gridZoomSlider'),
-            gridZoomLevelDisplay: document.getElementById('gridZoomLevelDisplay'),
-            
             // 提示框
             errorToast: document.getElementById('errorToast'),
             errorMessage: document.getElementById('errorMessage'),
@@ -130,16 +110,24 @@ class ImageFilterApp {
             confirmTitle: document.getElementById('confirmTitle'),
             confirmMessage: document.getElementById('confirmMessage'),
             confirmBtn: document.getElementById('confirmBtn'),
-            cancelBtn: document.getElementById('cancelBtn')
+            cancelBtn: document.getElementById('cancelBtn'),
+            
+            // 控制面板切换
+            toggleControlsBtn: document.getElementById('toggleControlsBtn'),
+            
+            // 简化模式按钮
+            saveBtnMinimal: document.getElementById('saveBtnMinimal'),
+            downloadBtnMinimal: document.getElementById('downloadBtnMinimal'),
+            clearSelectionBtnMinimal: document.getElementById('clearSelectionBtnMinimal'),
+            
+            // 网格缩放控制
+            gridZoomSlider: document.getElementById('gridZoomSlider'),
+            gridZoomLevelDisplay: document.getElementById('gridZoomLevelDisplay'),
+            
+            // 简化/完整模式容器
+            minimalActionControls: document.getElementById('minimalActionControls'),
+            fullControls: document.getElementById('fullControls')
         };
-        
-        // 调试：验证缩放按钮是否正确缓存
-        console.log('[cacheElements] zoomInBtn found:', !!this.elements.zoomInBtn);
-        console.log('[cacheElements] zoomOutBtn found:', !!this.elements.zoomOutBtn);
-        console.log('[cacheElements] zoomLevelDisplay found:', !!this.elements.zoomLevelDisplay);
-        console.log('[cacheElements] gridZoomInBtn found:', !!this.elements.gridZoomInBtn);
-        console.log('[cacheElements] gridZoomOutBtn found:', !!this.elements.gridZoomOutBtn);
-        console.log('[cacheElements] gridZoomLevelDisplay found:', !!this.elements.gridZoomLevelDisplay);
     }
 
     /**
@@ -151,7 +139,6 @@ class ImageFilterApp {
         this.elements.filePath.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.loadFile();
         });
-
         // 类别选择
         this.elements.categorySelect.addEventListener('change', (e) => {
             this.state.currentCategory = e.target.value;
@@ -159,33 +146,27 @@ class ImageFilterApp {
             this.loadImages();
         });
 
-        // 选择模式切换 - 圆点选择器
-        this.elements.positiveModeBtn.addEventListener('change', () => {
-            if (this.elements.positiveModeBtn.checked) {
-                this.setSelectionMode('positive');
-            }
+        if (this.elements.decisionSelect) {
+            this.elements.decisionSelect.addEventListener('change', (e) => {
+                this.state.currentDecision = e.target.value;
+                this.state.currentPage = 1;
+                this.state.selectedImages.clear();
+                this.loadImages();
+            });
+        }
+
+        // 选择模式切换
+        this.elements.positiveModeBtn.addEventListener('click', () => {
+            this.setSelectionMode('positive');
         });
-        this.elements.negativeModeBtn.addEventListener('change', () => {
-            if (this.elements.negativeModeBtn.checked) {
-                this.setSelectionMode('negative');
-            }
+        this.elements.negativeModeBtn.addEventListener('click', () => {
+            this.setSelectionMode('negative');
         });
 
-        // 操作按钮 - 完整控制面板版本
+        // 操作按钮
         this.elements.saveBtn.addEventListener('click', () => this.saveChanges());
         this.elements.downloadBtn.addEventListener('click', () => this.downloadResult());
         this.elements.clearSelectionBtn.addEventListener('click', () => this.clearSelection());
-        
-        // 操作按钮 - 简化控制面板版本
-        if (this.elements.saveBtnMinimal) {
-            this.elements.saveBtnMinimal.addEventListener('click', () => this.saveChanges());
-        }
-        if (this.elements.downloadBtnMinimal) {
-            this.elements.downloadBtnMinimal.addEventListener('click', () => this.downloadResult());
-        }
-        if (this.elements.clearSelectionBtnMinimal) {
-            this.elements.clearSelectionBtnMinimal.addEventListener('click', () => this.clearSelection());
-        }
 
         // 分页
         this.elements.prevPageBtn.addEventListener('click', () => this.previousPage());
@@ -201,33 +182,32 @@ class ImageFilterApp {
         this.elements.modalNextBtn.addEventListener('click', () => this.nextModalImage());
 
         // 缩放控制按钮
-        console.log('[bindEvents] Binding zoom button events...');
         if (this.elements.zoomInBtn) {
-            console.log('[bindEvents] zoomInBtn found, adding click listener');
             this.elements.zoomInBtn.addEventListener('click', () => this.increaseZoom());
-            console.log('[bindEvents] zoomInBtn click listener added');
-        } else {
-            console.log('[bindEvents] WARNING: zoomInBtn not found!');
         }
         if (this.elements.zoomOutBtn) {
-            console.log('[bindEvents] zoomOutBtn found, adding click listener');
             this.elements.zoomOutBtn.addEventListener('click', () => this.decreaseZoom());
-            console.log('[bindEvents] zoomOutBtn click listener added');
-        } else {
-            console.log('[bindEvents] WARNING: zoomOutBtn not found!');
         }
-        
-        // 网格缩放控制 - 滑块版本
-        console.log('[bindEvents] Binding grid zoom slider events...');
+
+        // 控制面板切换
+        if (this.elements.toggleControlsBtn) {
+            this.elements.toggleControlsBtn.addEventListener('click', () => this.toggleControls());
+        }
+
+        // 简化模式按钮
+        if (this.elements.saveBtnMinimal) {
+            this.elements.saveBtnMinimal.addEventListener('click', () => this.saveChanges());
+        }
+        if (this.elements.downloadBtnMinimal) {
+            this.elements.downloadBtnMinimal.addEventListener('click', () => this.downloadResult());
+        }
+        if (this.elements.clearSelectionBtnMinimal) {
+            this.elements.clearSelectionBtnMinimal.addEventListener('click', () => this.clearSelection());
+        }
+
+        // 网格缩放滑块
         if (this.elements.gridZoomSlider) {
-            console.log('[bindEvents] gridZoomSlider found, adding input listener');
-            this.elements.gridZoomSlider.addEventListener('input', (e) => {
-                const level = parseInt(e.target.value);
-                this.setGridZoomLevel(level);
-            });
-            console.log('[bindEvents] gridZoomSlider input listener added');
-        } else {
-            console.log('[bindEvents] WARNING: gridZoomSlider not found!');
+            this.elements.gridZoomSlider.addEventListener('input', (e) => this.handleGridZoomChange(e));
         }
 
         // 提示框关闭
@@ -237,9 +217,6 @@ class ImageFilterApp {
         // 确认对话框
         this.elements.confirmBtn.addEventListener('click', () => this.confirmAction());
         this.elements.cancelBtn.addEventListener('click', () => this.cancelConfirm());
-
-        // 折叠控制
-        this.elements.toggleControlsBtn.addEventListener('click', () => this.toggleControls());
 
         // 键盘事件
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
@@ -309,6 +286,7 @@ class ImageFilterApp {
                 this.state.reviewSamples = data.review_samples;
                 this.state.categories = data.categories;
                 this.state.currentCategory = 'all';
+                this.state.currentDecision = 'review';
                 this.state.currentPage = 1;
                 this.state.selectedImages.clear();
 
@@ -364,6 +342,7 @@ class ImageFilterApp {
                 },
                 body: JSON.stringify({
                     category: this.state.currentCategory,
+                    decision: this.state.currentDecision,
                     page: this.state.currentPage,
                     per_page: this.state.perPage
                 })
@@ -401,64 +380,16 @@ class ImageFilterApp {
                     <div class="empty-icon">📷</div>
                     <h3>没有找到图片</h3>
                     <p>当前类别下没有待审核的图片</p>
+                    <p>当前类别下没有待审核的图片</p>
                 </div>
             `;
-            // 如果没有图片，立即更新状态
-            this.updateStatus(`已加载 0 张图片`);
             return;
         }
 
-        let loadedCount = 0;
-        const totalCount = this.state.currentSamples.length;
-        
-        // 更新状态显示加载进度
-        this.updateStatus(`正在加载图片 (${loadedCount}/${totalCount})...`);
-
         this.state.currentSamples.forEach((sample, index) => {
             const imageCard = this.createImageCard(sample, index);
-            
-            // 监听图片加载完成事件
-            const img = imageCard.querySelector('img');
-            if (img) {
-                img.addEventListener('load', () => {
-                    loadedCount++;
-                    const progressPercent = Math.round((loadedCount / totalCount) * 100);
-                    
-                    // 更新进度条
-                    if (this.elements.progressFill) {
-                        this.elements.progressFill.style.width = `${progressPercent}%`;
-                    }
-                    
-                    // 更新状态文本
-                    this.updateStatus(`正在加载图片 (${loadedCount}/${totalCount})`);
-                    
-                    // 检查是否所有图片都加载完成
-                    if (loadedCount >= totalCount) {
-                        // 设置一个小的延迟，确保UI更新完成
-                        setTimeout(() => {
-                            this.hideProgress();
-                            this.updateStatus(`已成功加载 ${totalCount} 张图片`);
-                        }, 100);
-                    }
-                });
-                
-                img.addEventListener('error', () => {
-                    loadedCount++;
-                    // 即使图片加载失败，也继续计数
-                    if (loadedCount >= totalCount) {
-                        setTimeout(() => {
-                            this.hideProgress();
-                            this.updateStatus(`加载完成，所有 ${totalCount} 张图片已处理`);
-                        }, 100);
-                    }
-                });
-            }
-            
             this.elements.imageGrid.appendChild(imageCard);
         });
-        
-        // 应用当前的网格缩放设置
-        this.updateGridImageSize();
     }
 
     /**
@@ -596,9 +527,9 @@ class ImageFilterApp {
     setSelectionMode(mode) {
         this.state.selectionMode = mode;
         
-        // 更新圆点选择器状态
-        this.elements.positiveModeBtn.checked = mode === 'positive';
-        this.elements.negativeModeBtn.checked = mode === 'negative';
+        // 更新按钮状态
+        this.elements.positiveModeBtn.classList.toggle('active', mode === 'positive');
+        this.elements.negativeModeBtn.classList.toggle('active', mode === 'negative');
         
         this.updateStatus(`当前模式：${mode === 'positive' ? '正选' : '反选'}模式`);
     }
@@ -612,8 +543,6 @@ class ImageFilterApp {
         if (level > 5) level = 5;
         
         this.state.zoomLevel = level;
-        const scale = this.state.zoomScales[this.state.zoomLevel - 1];
-        console.log('[setZoomLevel] new level:', level, 'scale:', scale);
         this.updateModalImageSize();
         this.updateZoomDisplay();
     }
@@ -622,7 +551,6 @@ class ImageFilterApp {
      * 增加缩放级别
      */
     increaseZoom() {
-        console.log('[increaseZoom] called, current level:', this.state.zoomLevel);
         if (this.state.zoomLevel < 5) {
             this.setZoomLevel(this.state.zoomLevel + 1);
         }
@@ -632,7 +560,6 @@ class ImageFilterApp {
      * 减小缩放级别
      */
     decreaseZoom() {
-        console.log('[decreaseZoom] called, current level:', this.state.zoomLevel);
         if (this.state.zoomLevel > 1) {
             this.setZoomLevel(this.state.zoomLevel - 1);
         }
@@ -653,114 +580,6 @@ class ImageFilterApp {
     updateZoomDisplay() {
         if (this.elements.zoomLevelDisplay) {
             this.elements.zoomLevelDisplay.textContent = `${this.state.zoomLevel}/5`;
-        }
-    }
-
-    /**
-     * 设置网格缩放级别
-     * @param {number} level - 缩放级别 (1-5)
-     */
-    setGridZoomLevel(level) {
-        if (level < 1) level = 1;
-        if (level > 5) level = 5;
-        
-        this.state.gridZoomLevel = level;
-        const scale = this.state.gridZoomScales[this.state.gridZoomLevel - 1];
-        console.log('[setGridZoomLevel] new level:', level, 'scale:', scale);
-        this.updateGridImageSize();
-        this.updateGridZoomDisplay();
-    }
-
-    /**
-     * 增加网格缩放级别
-     */
-    increaseGridZoom() {
-        console.log('[increaseGridZoom] called, current level:', this.state.gridZoomLevel);
-        if (this.state.gridZoomLevel < 5) {
-            this.setGridZoomLevel(this.state.gridZoomLevel + 1);
-        }
-    }
-
-    /**
-     * 减小网格缩放级别
-     */
-    decreaseGridZoom() {
-        console.log('[decreaseGridZoom] called, current level:', this.state.gridZoomLevel);
-        if (this.state.gridZoomLevel > 1) {
-            this.setGridZoomLevel(this.state.gridZoomLevel - 1);
-        }
-    }
-
-    /**
-     * 更新网格图片大小
-     */
-    updateGridImageSize() {
-        const scale = this.state.gridZoomScales[this.state.gridZoomLevel - 1];
-        const imageGrid = document.getElementById('imageGrid');
-        const imageCards = document.querySelectorAll('.image-card');
-        
-        if (!imageGrid) {
-            console.log('[updateGridImageSize] imageGrid not found');
-            return;
-        }
-        
-        // 基础尺寸
-        const baseCardWidth = 280;
-        const baseImageHeight = 200;
-        const baseInfoPadding = 15;
-        const gap = 16; // 卡片之间的间距
-        
-        // 根据缩放比例调整实际尺寸
-        const cardWidth = Math.round(baseCardWidth * scale);
-        const imageHeight = Math.round(baseImageHeight * scale);
-        const infoPadding = Math.round(baseInfoPadding * scale);
-        const adjustedGap = Math.round(gap * scale);
-        
-        // 设置 Grid 列数和间距
-        imageGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`;
-        imageGrid.style.gap = `${adjustedGap}px`;
-        
-        // 调整每个卡片的实际尺寸
-        imageCards.forEach(card => {
-            // 移除 transform，直接调整尺寸
-            card.style.transform = 'none';
-            card.style.width = '100%';
-            
-            // 调整图片容器高度
-            const imageWrapper = card.querySelector('.image-wrapper');
-            if (imageWrapper) {
-                imageWrapper.style.height = `${imageHeight}px`;
-            }
-            
-            // 调整信息区域的 padding
-            const imageInfo = card.querySelector('.image-info');
-            if (imageInfo) {
-                imageInfo.style.padding = `${infoPadding}px`;
-            }
-            
-            // 调整字体大小
-            const imageId = card.querySelector('.image-id');
-            const imagePath = card.querySelector('.image-path');
-            const categoryItems = card.querySelectorAll('.category-item');
-            
-            if (imageId) imageId.style.fontSize = `${14 * scale}px`;
-            if (imagePath) imagePath.style.fontSize = `${12 * scale}px`;
-            categoryItems.forEach(item => {
-                item.style.fontSize = `${12 * scale}px`;
-                item.style.padding = `${4 * scale}px ${8 * scale}px`;
-            });
-        });
-        
-        console.log('[updateGridImageSize] scale:', scale, 'cardWidth:', cardWidth, 'imageHeight:', imageHeight, 'gap:', adjustedGap, 'cards:', imageCards.length);
-    }
-
-    /**
-     * 更新网格缩放级别显示
-     */
-    updateGridZoomDisplay() {
-        if (this.elements.gridZoomLevelDisplay) {
-            const levelTexts = ['很小', '较小', '默认', '较大', '很大'];
-            this.elements.gridZoomLevelDisplay.textContent = levelTexts[this.state.gridZoomLevel - 1];
         }
     }
 
@@ -935,6 +754,63 @@ class ImageFilterApp {
     }
 
     /**
+     * 切换控制面板显示模式
+     */
+    toggleControls() {
+        const isCollapsed = this.elements.fullControls.style.display === 'none';
+        
+        if (isCollapsed) {
+            // 展开控制面板
+            this.elements.fullControls.style.display = 'block';
+            this.elements.minimalActionControls.style.display = 'none';
+            this.elements.toggleControlsBtn.querySelector('.toggle-icon').textContent = '🔽';
+            this.elements.toggleControlsBtn.querySelector('.toggle-text').textContent = '收起';
+            
+            // 等待动画完成后更新间距（CSS动画时长为300ms）
+            setTimeout(() => this.updateMainContainerPadding(), 350);
+        } else {
+            // 收起控制面板
+            this.elements.fullControls.style.display = 'none';
+            this.elements.minimalActionControls.style.display = 'flex';
+            this.elements.toggleControlsBtn.querySelector('.toggle-icon').textContent = '🔼';
+            this.elements.toggleControlsBtn.querySelector('.toggle-text').textContent = '展开';
+            
+            // 收起时立即更新间距
+            this.updateMainContainerPadding();
+        }
+    }
+
+    /**
+     * 处理网格缩放变化
+     */
+    handleGridZoomChange(e) {
+        const level = parseInt(e.target.value);
+        this.state.gridZoomLevel = level;
+        
+        // 更新显示文本
+        const levelTexts = ['最小', '较小', '默认', '较大', '最大'];
+        if (this.elements.gridZoomLevelDisplay) {
+            this.elements.gridZoomLevelDisplay.textContent = levelTexts[level - 1];
+        }
+        
+        // 应用缩放到图片网格
+        const scales = [0.6, 0.8, 1.0, 1.2, 1.4];
+        const baseWidth = 280; // CSS中定义的默认宽度
+        const baseHeight = 200; // CSS中定义的默认高度
+        const scale = scales[level - 1];
+        const newWidth = Math.round(baseWidth * scale);
+        const newHeight = Math.round(baseHeight * scale);
+        
+        this.elements.imageGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${newWidth}px, 1fr))`;
+        
+        // 同时调整图片容器的高度，保持宽高比
+        const imageWrappers = document.querySelectorAll('.image-wrapper');
+        imageWrappers.forEach(wrapper => {
+            wrapper.style.minHeight = `${newHeight}px`;
+        });
+    }
+
+    /**
      * 处理鼠标移动
      */
     handleMouseMove(e) {
@@ -959,74 +835,31 @@ class ImageFilterApp {
         } else {
             controlPanel.classList.remove('scrolled');
         }
-        // 滚动时也更新位置
-        this.updateMainContainerPosition();
-    }
-
-    /**
-     * 更新主容器位置
-     */
-    updateMainContainerPosition() {
-        const controlPanel = document.getElementById('controlPanel');
-        const statusBar = this.elements.statusBar;
-        const mainContainer = this.elements.imageGrid?.parentElement;
-        
-        if (!controlPanel || !mainContainer) return;
-        
-        // 获取控制面板的实际高度
-        const controlPanelRect = controlPanel.getBoundingClientRect();
-        let topPosition = controlPanelRect.bottom;
-        
-        // 如果有显示的浮窗，考虑浮窗高度
-        if (statusBar && !statusBar.classList.contains('hidden')) {
-            const statusRect = statusBar.getBoundingClientRect();
-            if (statusRect.bottom > topPosition) {
-                topPosition = statusRect.bottom;
-            }
-        }
-        
-        // 添加额外的间距
-        topPosition += 10; // 10px间距
-        
-        // 设置主容器位置
-        mainContainer.style.paddingTop = `${topPosition}px`;
-    }
-
-    /**
-     * 切换控制面板显示状态
-     */
-    toggleControls() {
-        const isCollapsed = this.elements.controlPanel.classList.contains('collapsed');
-        
-        if (isCollapsed) {
-            // 展开控制面板
-            this.elements.controlPanel.classList.remove('collapsed');
-            this.elements.toggleControlsBtn.classList.remove('collapsed');
-            this.elements.fullControls.classList.remove('hidden');
-            this.elements.minimalActionControls.style.display = 'none';
-            this.elements.fileInputSection.style.display = 'block';
-            this.elements.toggleControlsBtn.querySelector('.toggle-text').textContent = '收起';
-            this.elements.toggleControlsBtn.querySelector('.toggle-icon').textContent = '🔽';
-        } else {
-            // 收起控制面板
-            this.elements.controlPanel.classList.add('collapsed');
-            this.elements.toggleControlsBtn.classList.add('collapsed');
-            this.elements.fullControls.classList.add('hidden');
-            this.elements.minimalActionControls.style.display = 'block';
-            this.elements.fileInputSection.style.display = 'none';
-            this.elements.toggleControlsBtn.querySelector('.toggle-text').textContent = '展开';
-            this.elements.toggleControlsBtn.querySelector('.toggle-icon').textContent = '🔼';
-        }
-        
-        // 更新主容器位置
-        setTimeout(() => this.updateMainContainerPosition(), 300);
     }
 
     /**
      * 处理窗口大小变化
      */
     handleResize() {
-        this.updateMainContainerPosition();
+        // 更新主容器的顶部间距
+        this.updateMainContainerPadding();
+    }
+
+    /**
+     * 更新主容器的顶部间距，根据控制面板的实际高度
+     */
+    updateMainContainerPadding() {
+        const controlPanel = document.getElementById('controlPanel');
+        const mainContainer = document.querySelector('.main-container');
+        
+        if (controlPanel && mainContainer) {
+            // 获取控制面板的实际高度
+            const panelHeight = controlPanel.offsetHeight;
+            // 添加一些额外的间距
+            const padding = panelHeight + 20;
+            // 设置主容器的padding-top
+            mainContainer.style.paddingTop = `${padding}px`;
+        }
     }
 
     /**
@@ -1063,7 +896,12 @@ class ImageFilterApp {
      */
     updateSampleCount() {
         const categoryText = this.state.currentCategory === 'all' ? '所有类别' : this.state.currentCategory;
-        this.elements.sampleCount.textContent = `${categoryText}：共 ${this.state.totalCount} 个样本`;
+        const decisionText = {
+            'review': '待审核',
+            'accept': '已接受',
+            'reject': '已拒绝'
+        }[this.state.currentDecision] || this.state.currentDecision;
+        this.elements.sampleCount.textContent = `${categoryText} / ${decisionText}：共 ${this.state.totalCount} 个样本`;
     }
 
     /**
@@ -1071,18 +909,19 @@ class ImageFilterApp {
      */
     updateActionButtons() {
         const hasSelection = this.state.selectedImages.size > 0;
+        const isLoaded = this.state.loaded;
         
-        // 保存按钮始终可用（支持空选择保存）
-        this.elements.saveBtn.disabled = !this.state.loaded;
-        this.elements.downloadBtn.disabled = !this.state.loaded;
+        // 完整模式按钮
+        this.elements.saveBtn.disabled = !isLoaded;
+        this.elements.downloadBtn.disabled = !isLoaded;
         this.elements.clearSelectionBtn.disabled = !hasSelection;
         
-        // 同时更新简化模式按钮的状态
+        // 简化模式按钮
         if (this.elements.saveBtnMinimal) {
-            this.elements.saveBtnMinimal.disabled = !this.state.loaded;
+            this.elements.saveBtnMinimal.disabled = !isLoaded;
         }
         if (this.elements.downloadBtnMinimal) {
-            this.elements.downloadBtnMinimal.disabled = !this.state.loaded;
+            this.elements.downloadBtnMinimal.disabled = !isLoaded;
         }
         if (this.elements.clearSelectionBtnMinimal) {
             this.elements.clearSelectionBtnMinimal.disabled = !hasSelection;
@@ -1127,6 +966,7 @@ class ImageFilterApp {
                     body: JSON.stringify({
                         selection_mode: this.state.selectionMode,
                         current_category: this.state.currentCategory,
+                    decision: this.state.currentDecision,
                         selected_images: [],
                         updates: []
                     })
@@ -1247,54 +1087,20 @@ class ImageFilterApp {
     /**
      * UI辅助方法
      */
-    updateStatus(message, autoHide = true) {
-        if (this.elements.statusText) {
-            this.elements.statusText.textContent = message;
-            
-            // 显示状态浮窗
-            if (this.elements.statusBar) {
-                this.elements.statusBar.classList.remove('hidden');
-                // 更新主容器位置
-                setTimeout(() => this.updateMainContainerPosition(), 10);
-            }
-            
-            // 清除之前的自动隐藏定时器
-            if (this.statusHideTimer) {
-                clearTimeout(this.statusHideTimer);
-                this.statusHideTimer = null;
-            }
-            
-            // 1.5秒后自动隐藏
-            if (autoHide) {
-                this.statusHideTimer = setTimeout(() => {
-                    this.hideStatus();
-                    // 隐藏后也更新位置
-                    setTimeout(() => this.updateMainContainerPosition(), 10);
-                }, 1500);
-            }
-        }
+    updateStatus(message) {
+        this.elements.statusText.textContent = message;
     }
 
     showProgress(message) {
-        this.updateStatus(message, false); // 进度状态不自动隐藏
-        if (this.elements.progressBar) {
-            this.elements.progressBar.style.display = 'block';
-            if (this.elements.progressFill) {
-                this.elements.progressFill.style.width = '0%';
-            }
-        }
+        this.elements.statusText.textContent = message;
+        this.elements.statusBar.style.display = 'block';
+        this.elements.progressBar.style.display = 'block';
+        this.elements.progressFill.style.width = '0%';
     }
 
     hideProgress() {
-        if (this.elements.progressBar) {
-            this.elements.progressBar.style.display = 'none';
-        }
-    }
-
-    hideStatus() {
-        if (this.elements.statusBar) {
-            this.elements.statusBar.classList.add('hidden');
-        }
+        this.elements.statusBar.style.display = 'none';
+        this.elements.progressBar.style.display = 'none';
     }
 
     showError(message) {

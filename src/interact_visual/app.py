@@ -67,23 +67,28 @@ def load_and_process_json(file_path: str) -> Dict[str, Any]:
         if not isinstance(data, list):
             raise ValueError("JSON file must contain a list of objects")
         
+        all_samples = []
         review_samples = []
         categories = set()
         
         for item in data:
+            all_samples.append(item)
+            
+            # 提取所有类别
+            if 'categories' in item and isinstance(item['categories'], list):
+                for cat_info in item['categories']:
+                    if isinstance(cat_info, dict) and 'category' in cat_info:
+                        categories.add(cat_info['category'])
+            
+            # 单独收集review样本用于兼容性
             if item.get('decision') == 'review':
                 review_samples.append(item)
-                
-                # 提取所有类别
-                if 'categories' in item and isinstance(item['categories'], list):
-                    for cat_info in item['categories']:
-                        if isinstance(cat_info, dict) and 'category' in cat_info:
-                            categories.add(cat_info['category'])
         
         logger.info(f"Loaded {len(data)} total items, {len(review_samples)} review samples")
         logger.info(f"Found categories: {sorted(categories)}")
         
         return {
+            'all_samples': all_samples,
             'review_samples': review_samples,
             'categories': sorted(list(categories)),
             'total_count': len(data),
@@ -105,6 +110,10 @@ def filter_samples_by_category(samples: List[Dict], category: str) -> List[Dict]
                     filtered.append(sample)
                     break
     return filtered
+
+def filter_samples_by_decision(samples: List[Dict], decision: str) -> List[Dict]:
+    """根据整体决策状态筛选样本"""
+    return [sample for sample in samples if sample.get('decision') == decision]
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -152,6 +161,7 @@ def load_review_data():
         current_data.update({
             'original_file': file_path,
             'copy_file': copy_path,
+            'all_samples': processed_data['all_samples'],
             'review_samples': processed_data['review_samples'],
             'categories': processed_data['categories'],
             'loaded_at': datetime.now().isoformat()
@@ -219,24 +229,32 @@ def filter_by_category():
                 'success': False,
                 'error': 'No data provided'
             }), 400
-        
         category = data.get('category')
-        page = int(data.get('page', 1))
+        decision = data.get('decision', 'review')
+        page = int(data.get('page',1))
         per_page = int(data.get('per_page', 20))
         
-        if not current_data['review_samples']:
+        if not current_data.get('all_samples'):
             return jsonify({
                 'success': False,
                 'error': 'No data loaded. Please load review data first.'
             }), 400
         
-        # 筛选样本
-        if category == 'all':
-            filtered_samples = current_data['review_samples']
+        # 根据决策状态获取样本
+        if decision == 'review':
+            # review状态使用内存中的review_samples
+            base_samples = current_data['review_samples']
         else:
-            filtered_samples = filter_samples_by_category(
-                current_data['review_samples'], category
+            # accept或reject状态从all_samples中筛选
+            base_samples = filter_samples_by_decision(
+                current_data['all_samples'], decision
             )
+        
+        # 再按类别筛选
+        if category == 'all':
+            filtered_samples = base_samples
+        else:
+            filtered_samples = filter_samples_by_category(base_samples, category)
         
         # 分页
         total_count = len(filtered_samples)

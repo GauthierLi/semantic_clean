@@ -131,6 +131,7 @@ body {
     margin-left: auto;
 }
 
+
 /* 选择模式控制 - 圆点选择器 */
 .selection-controls {
     display: flex;
@@ -325,6 +326,7 @@ body {
     z-index: 1500;
     animation: slideInDown 0.3s ease-out;
     transition: opacity 0.3s ease;
+    display: none; /* 默认隐藏 */
 }
 
 .status-toast.hidden {
@@ -466,7 +468,10 @@ body {
 .main-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px 20px 40px; /* Top padding will be set dynamically by JavaScript */
+    padding-top: 80px; /* 初始值，会被JavaScript动态调整 */
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-bottom: 40px;
 }
 
 /* 瀑布式图片网格 */
@@ -508,15 +513,18 @@ body {
 .image-wrapper {
     position: relative;
     width: 100%;
-    height: 200px;
+    min-height: 200px;
     overflow: hidden;
-    transition: height 0.3s ease;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .image-card img {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto;
+    object-fit: contain;
     transition: all 0.3s ease;
 }
 
@@ -559,6 +567,7 @@ body {
 /* 图片信息 */
 .image-info {
     padding: 15px;
+    /* 移除高度限制和滚动条，让内容完整显示 */
 }
 
 .image-id {
