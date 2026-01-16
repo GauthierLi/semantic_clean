@@ -225,6 +225,8 @@ body {
     justify-content: space-between;
     gap: 30px;
     width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 .slider-container {
@@ -248,6 +250,8 @@ body {
 
 .zoom-slider {
     width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
     height: 6px;
     border-radius: 3px;
     background: #e9ecef;
@@ -513,6 +517,8 @@ body {
 .image-wrapper {
     position: relative;
     width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
     height: 200px;
     overflow: hidden;
     transition: all 0.3s ease;
@@ -520,6 +526,8 @@ body {
 
 .image-card img {
     width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
     height: 100%;
     object-fit: contain;
     transition: all 0.3s ease;
@@ -636,7 +644,6 @@ body {
     opacity: 0.8;
 }
 
-/* 分页控制 */
 .pagination {
     display: flex;
     justify-content: center;
@@ -653,6 +660,44 @@ body {
     font-size: 14px;
     color: #6c757d;
     font-weight: 500;
+}
+
+.per-page-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 20px;
+    padding-left: 20px;
+    border-left: 2px solid #e9ecef;
+    flex-shrink: 0;
+}
+
+.per-page-control label {
+    font-size: 14px;
+    color: #495057;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.per-page-select {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 80px;
+}
+
+.per-page-select:hover {
+    border-color: #007acc;
+}
+
+.per-page-select:focus {
+    outline: none;
+    border-color: #007acc;
+    box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
 }
 
 /* 图片模态框 */
@@ -728,6 +773,8 @@ body {
 
 .modal-body img {
     max-width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
     max-height: 50vh;
     object-fit: contain;
     border-radius: 8px;
@@ -746,15 +793,21 @@ body {
     color: #6c757d;
 }
 
-.modal-controls {
     display: flex;
     justify-content: center;
-    gap: 10px;
+    align-items: center;
+    gap: 12px;
     margin-top: 20px;
     flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
 }
 
-/* 缩放控制区域 */
+.modal-controls > * {
+    flex-shrink: 0;
+}
+
 .zoom-controls {
     display: flex;
     align-items: center;
@@ -763,6 +816,7 @@ body {
     background: #f8f9fa;
     border-radius: 8px;
     margin-bottom: 15px;
+    flex-shrink: 0;
 }
 
 .zoom-level {
@@ -1023,6 +1077,8 @@ body {
     
     .progress-bar {
         width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
     }
     
     .modal-content {
@@ -1030,8 +1086,25 @@ body {
         max-height: 95vh;
     }
     
-    .modal-controls {
         flex-direction: column;
+    }
+    
+    .pagination {
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px;
+    }
+    
+    .per-page-control {
+        margin-left: 0;
+        padding-left: 0;
+        border-left: none;
+        border-top: 2px solid #e9ecef;
+        padding-top: 15px;
+        width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+        justify-content: center;
     }
     
     .error-toast, .success-toast {

@@ -13,7 +13,7 @@ class ImageFilterApp {
             currentCategory: 'all',
             currentDecision: 'review',  // 当前决策状态：review | accept | reject
             currentPage: 1,
-            perPage: 20,
+            perPage: 100,  // 默认每页显示100张图片
             totalCount: 0,
             totalPages: 0,
             selectedImages: new Set(),
@@ -73,6 +73,7 @@ class ImageFilterApp {
             prevPageBtn: document.getElementById('prevPageBtn'),
             nextPageBtn: document.getElementById('nextPageBtn'),
             pageInfo: document.getElementById('pageInfo'),
+            perPageSelect: document.getElementById('perPageSelect'),
             
             // 状态显示
             sampleCount: document.getElementById('sampleCount'),
@@ -171,6 +172,15 @@ class ImageFilterApp {
         // 分页
         this.elements.prevPageBtn.addEventListener('click', () => this.previousPage());
         this.elements.nextPageBtn.addEventListener('click', () => this.nextPage());
+        
+        // 每页显示数量选择
+        if (this.elements.perPageSelect) {
+            this.elements.perPageSelect.addEventListener('change', (e) => {
+                this.state.perPage = parseInt(e.target.value);
+                this.state.currentPage = 1; // 重置到第一页
+                this.loadImages();
+            });
+        }
 
         // 模态框
         this.elements.modalClose.addEventListener('click', () => this.closeModal());
