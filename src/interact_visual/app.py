@@ -478,31 +478,53 @@ def apply_empty_selection_logic(copy_data, selection_mode, current_category):
     
     for sample in copy_data:
         if sample.get('decision') == 'review':
-            # 找到对应类别的决策
-            category_found = False
-            if 'categories' in sample and isinstance(sample['categories'], list):
-                for cat_info in sample['categories']:
-                    if (isinstance(cat_info, dict) and 
-                        cat_info.get('category') == current_category):
-                        # 根据选择模式设置决策
-                        if selection_mode == 'positive':
-                            # 正选模式：未选择 = reject
-                            if cat_info.get('decision') != 'reject':
-                                cat_info['decision'] = 'reject'
-                                updated_count += 1
-                        else:
-                            # 反选模式：未选择 = accept
-                            if cat_info.get('decision') != 'accept':
-                                cat_info['decision'] = 'accept'
-                                updated_count += 1
-                        category_found = True
-                        break
-            
-            if category_found:
+            # 处理所有类别的情况
+            if current_category == 'all':
+                # 更新所有类别的决策
+                if 'categories' in sample and isinstance(sample['categories'], list):
+                    for cat_info in sample['categories']:
+                        if isinstance(cat_info, dict):
+                            # 根据选择模式设置决策
+                            if selection_mode == 'positive':
+                                # 正选模式：未选择 = reject
+                                if cat_info.get('decision') != 'reject':
+                                    cat_info['decision'] = 'reject'
+                                    updated_count += 1
+                            else:
+                                # 反选模式：未选择 = accept
+                                if cat_info.get('decision') != 'accept':
+                                    cat_info['decision'] = 'accept'
+                                    updated_count += 1
                 # 更新整体决策
                 update_overall_decision(sample)
                 if sample.get('decision') != 'review':  # 只有当整体决策真的改变时才计数
                     updated_count += 1
+            else:
+                # 处理特定类别的情况
+                category_found = False
+                if 'categories' in sample and isinstance(sample['categories'], list):
+                    for cat_info in sample['categories']:
+                        if (isinstance(cat_info, dict) and 
+                            cat_info.get('category') == current_category):
+                            # 根据选择模式设置决策
+                            if selection_mode == 'positive':
+                                # 正选模式：未选择 = reject
+                                if cat_info.get('decision') != 'reject':
+                                    cat_info['decision'] = 'reject'
+                                    updated_count += 1
+                            else:
+                                # 反选模式：未选择 = accept
+                                if cat_info.get('decision') != 'accept':
+                                    cat_info['decision'] = 'accept'
+                                    updated_count += 1
+                            category_found = True
+                            break
+                
+                if category_found:
+                    # 更新整体决策
+                    update_overall_decision(sample)
+                    if sample.get('decision') != 'review':  # 只有当整体决策真的改变时才计数
+                        updated_count += 1
     
     return updated_count
 
@@ -545,13 +567,21 @@ def save_changes():
             }), 500
         
         total_updated = 0
+        empty_selection_applied = False
         
         # 如果没有选择任何图片，应用空选择逻辑
-        if len(selected_images) == 0 and len(updates) == 0 and current_category != 'all':
+        if len(selected_images) == 0 and len(updates) == 0:
             logger.info(f"No images selected, applying empty selection logic for {selection_mode} mode")
             empty_update_count = apply_empty_selection_logic(copy_data, selection_mode, current_category)
             total_updated += empty_update_count
+            empty_selection_applied = True
             logger.info(f"Empty selection logic updated {empty_update_count} samples")
+            
+            # 更新内存中的数据
+            current_data['all_samples'] = copy_data
+            # 重新生成review_samples
+            current_data['review_samples'] = [s for s in copy_data if s.get('decision') == 'review']
+            logger.info(f"Updated in-memory data: {len(current_data['review_samples'])} review samples")
         else:
             # 处理每个更新
             for update in updates:

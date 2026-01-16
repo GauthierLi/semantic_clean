@@ -529,6 +529,11 @@ class ImageFilterApp {
         }
 
         this.updateActionButtons();
+        
+        // 更新性能显示
+        if (this.updatePerformanceStats) {
+            this.updatePerformanceStats();
+        }
     }
 
     /**
@@ -968,7 +973,7 @@ class ImageFilterApp {
                     body: JSON.stringify({
                         selection_mode: this.state.selectionMode,
                         current_category: this.state.currentCategory,
-                    decision: this.state.currentDecision,
+                        decision: this.state.currentDecision,
                         selected_images: [],
                         updates: []
                     })
@@ -979,6 +984,20 @@ class ImageFilterApp {
                 if (data.success) {
                     const modeText = data.empty_selection_applied ? '（空选择逻辑）' : '';
                     this.showSuccess(`保存成功！更新了 ${data.updated_count} 个样本${modeText}`);
+                    
+                    // 如果应用了空选择逻辑，需要切换决策状态
+                    if (data.empty_selection_applied) {
+                        const newDecision = this.state.selectionMode === 'positive' ? 'reject' : 'accept';
+                        this.state.currentDecision = newDecision;
+                        this.state.currentPage = 1;
+                        this.state.selectedImages.clear();
+                        
+                        // 更新决策选择器的显示
+                        if (this.elements.decisionSelect) {
+                            this.elements.decisionSelect.value = newDecision;
+                        }
+                    }
+                    
                     this.loadImages(); // 重新加载图片以显示更新后的状态
                 } else {
                     this.showError(`保存失败：${data.error}`);
@@ -1036,7 +1055,14 @@ class ImageFilterApp {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    body: JSON.stringify({
+                        selection_mode: this.state.selectionMode,
+                        current_category: this.state.currentCategory,
+                        decision: this.state.currentDecision,
+                        selected_images: Array.from(this.state.selectedImages),
+                        updates: updates
+                    })
                 });
 
                 const saveData = await saveResponse.json();
