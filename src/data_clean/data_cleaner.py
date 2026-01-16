@@ -36,7 +36,7 @@ class DataCleaner:
             if not isinstance(cat, str):
                 raise ValueError("All items in validate_categories must be strings")
     
-    def clean_target_data(self, target_json: str, output_json: str, batch_size: int = 50) -> List[Dict]:
+    def clean_target_data(self, target_json: str, output_json: str, batch_size: int = 512) -> List[Dict]:
         """清洗目标数据并返回结果，支持批处理以优化内存使用"""
         if not os.path.exists(target_json):
             raise FileNotFoundError(f"Target file {target_json} does not exist")

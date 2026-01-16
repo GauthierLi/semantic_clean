@@ -11,8 +11,8 @@ from .feature_extractor import DINOv3FeatureExtractor
 from .multi_gpu_extractor import MultiGPUFeatureExtractor
 
 class ImageSerializer:
-    def __init__(self, db_path: str = "chroma_db", model_path: str = None, batch_size: int = 8, 
-                 use_multi_gpu: bool = True, gpus: List[str] = None, batch_per_gpu: int = 8):
+    def __init__(self, db_path: str = "chroma_db", model_path: str = None, batch_size: int = 64, 
+                 use_multi_gpu: bool = True, gpus: List[str] = None, batch_per_gpu: int = 64):
         """Initialize image serializer with multi-GPU support
         
         Args:

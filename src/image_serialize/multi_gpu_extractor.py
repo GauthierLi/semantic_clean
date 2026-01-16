@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class MultiGPUFeatureExtractor:
     """多GPU批量特征提取器，支持在多个GPU上并行推理"""
     
-    def __init__(self, model_path=None, gpus=None, batch_per_gpu=32):
+    def __init__(self, model_path=None, gpus=None, batch_per_gpu=64):
         """初始化多GPU特征提取器
         
         Args:
