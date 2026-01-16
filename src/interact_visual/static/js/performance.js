@@ -44,6 +44,9 @@
                             tempImg.onload = () => {
                                 img.src = src;
                                 img.classList.add('loaded');
+                                // 清除加载动画的背景和动画
+                                img.style.background = 'none';
+                                img.style.animation = 'none';
                                 observer.unobserve(img);
                             };
                             tempImg.onerror = () => {
