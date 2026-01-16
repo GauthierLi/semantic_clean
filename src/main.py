@@ -31,7 +31,7 @@ def main():
     parser.add_argument('--target', type=str, help='Target JSON file to clean')
     parser.add_argument('--output', type=str, help='Output JSON file for cleaned results')
     parser.add_argument('--db-path', type=str, default='chroma_db', help='Path to ChromaDB database')
-    parser.add_argument('--batch-size', type=int, default=50, help='Batch size for processing (default: 50)')
+    parser.add_argument('--batch-size', type=int, default=512, help='Batch size for processing (default: 512)')
     
     args = parser.parse_args()
     

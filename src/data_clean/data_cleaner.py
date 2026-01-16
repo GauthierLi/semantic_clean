@@ -291,176 +291,176 @@ class DataCleaner:
         
         return batch_results
     
-    def process_single_image(self, image_data: Dict, features_dict: Dict[str, torch.Tensor] = None) -> Dict:
-        """处理单个图像的清洗逻辑，支持使用预提取的特征
+    # def process_single_image(self, image_data: Dict, features_dict: Dict[str, torch.Tensor] = None) -> Dict:
+    #     """处理单个图像的清洗逻辑，支持使用预提取的特征
         
-        Args:
-            image_data: 图像数据
-            features_dict: 预提取的特征字典（可选）
-        """
-        image_id = image_data.get('id', '')
-        image_path = image_data.get('image_path', '')
-        categories = image_data.get('category', [])
+    #     Args:
+    #         image_data: 图像数据
+    #         features_dict: 预提取的特征字典（可选）
+    #     """
+    #     image_id = image_data.get('id', '')
+    #     image_path = image_data.get('image_path', '')
+    #     categories = image_data.get('category', [])
         
-        if not image_path:
-            logger.error(f"缺少图像路径 - Image ID: {image_id}, Path: {image_path}, Error: '缺少图像路径'")
-            return {
-                'image_id': image_id,
-                'image_path': image_path,
-                'decision': 'drop',
-                'error': '缺少图像路径'
-            }
+    #     if not image_path:
+    #         logger.error(f"缺少图像路径 - Image ID: {image_id}, Path: {image_path}, Error: '缺少图像路径'")
+    #         return {
+    #             'image_id': image_id,
+    #             'image_path': image_path,
+    #             'decision': 'drop',
+    #             'error': '缺少图像路径'
+    #         }
         
-        if not os.path.exists(image_path):
-            logger.error(f"图像文件不存在 - Image ID: {image_id}, Path: {image_path}, Error: '图像文件不存在'")
-            return {
-                'image_id': image_id,
-                'image_path': image_path,
-                'decision': 'drop',
-                'error': '图像文件不存在'
-            }
+    #     if not os.path.exists(image_path):
+    #         logger.error(f"图像文件不存在 - Image ID: {image_id}, Path: {image_path}, Error: '图像文件不存在'")
+    #         return {
+    #             'image_id': image_id,
+    #             'image_path': image_path,
+    #             'decision': 'drop',
+    #             'error': '图像文件不存在'
+    #         }
         
-        # 提取特征
-        try:
-            # 优先使用预提取的特征
-            if features_dict and image_id in features_dict:
-                query_feature = features_dict[image_id]
-                if query_feature is None:
-                    raise ValueError("特征提取失败")
-            else:
-                # 回退到单张提取
-                image = cv2.imread(image_path)
-                if image is None:
-                    return {
-                        'image_id': image_id,
-                        'image_path': image_path,
-                        'decision': 'reject',
-                        'error': '无法读取图像文件'
-                    }
+    #     # 提取特征
+    #     try:
+    #         # 优先使用预提取的特征
+    #         if features_dict and image_id in features_dict:
+    #             query_feature = features_dict[image_id]
+    #             if query_feature is None:
+    #                 raise ValueError("特征提取失败")
+    #         else:
+    #             # 回退到单张提取
+    #             image = cv2.imread(image_path)
+    #             if image is None:
+    #                 return {
+    #                     'image_id': image_id,
+    #                     'image_path': image_path,
+    #                     'decision': 'reject',
+    #                     'error': '无法读取图像文件'
+    #                 }
                 
-                query_feature = self.feature_extractor.extract_features(image)
+    #             query_feature = self.feature_extractor.extract_features(image)
             
-            query_feature = query_feature.cpu().numpy().flatten()
+    #         query_feature = query_feature.cpu().numpy().flatten()
             
-        except Exception as e:
-            logger.error(f"特征提取失败 - Image ID: {image_id}, Path: {image_path}, Error: {str(e)}")
-            return {
-                'image_id': image_id,
-                'image_path': image_path,
-                'decision': 'reject',
-                'error': f'特征提取失败: {str(e)}'
-            }
+    #     except Exception as e:
+    #         logger.error(f"特征提取失败 - Image ID: {image_id}, Path: {image_path}, Error: {str(e)}")
+    #         return {
+    #             'image_id': image_id,
+    #             'image_path': image_path,
+    #             'decision': 'reject',
+    #             'error': f'特征提取失败: {str(e)}'
+    #         }
         
-        # 过滤需要验证的类别
-        if self.validate_categories:
-            # 只验证配置列表中的类别（如果存在于图像类别中）
-            categories_to_validate = [cat for cat in categories if cat in self.validate_categories]
-            if not categories_to_validate:
-                return {
-                    'image_id': image_id,
-                    'image_path': image_path,
-                    'decision': 'accept',
-                    'total_categories': len(categories),
-                    'validated_categories': 0,
-                    'categories': [],
-                    'score': 0.0,
-                    'error': f'图像类别 {[categories]} 与配置的验证类别 {self.validate_categories} 无匹配'
-                }
-        else:
-            # 验证所有类别
-            categories_to_validate = categories
+    #     # 过滤需要验证的类别
+    #     if self.validate_categories:
+    #         # 只验证配置列表中的类别（如果存在于图像类别中）
+    #         categories_to_validate = [cat for cat in categories if cat in self.validate_categories]
+    #         if not categories_to_validate:
+    #             return {
+    #                 'image_id': image_id,
+    #                 'image_path': image_path,
+    #                 'decision': 'accept',
+    #                 'total_categories': len(categories),
+    #                 'validated_categories': 0,
+    #                 'categories': [],
+    #                 'score': 0.0,
+    #                 'error': f'图像类别 {[categories]} 与配置的验证类别 {self.validate_categories} 无匹配'
+    #             }
+    #     else:
+    #         # 验证所有类别
+    #         categories_to_validate = categories
         
-        if not categories_to_validate:
-            return {
-                'image_id': image_id,
-                'image_path': image_path,
-                'decision': 'review',
-                'total_categories': len(categories),
-                'validated_categories': 0,
-                'categories': [],
-                'score': 0.0,
-                'error': '没有指定类别'
-            }
+    #     if not categories_to_validate:
+    #         return {
+    #             'image_id': image_id,
+    #             'image_path': image_path,
+    #             'decision': 'review',
+    #             'total_categories': len(categories),
+    #             'validated_categories': 0,
+    #             'categories': [],
+    #             'score': 0.0,
+    #             'error': '没有指定类别'
+    #         }
         
-        # 对指定类别进行验证
-        category_results = []
-        final_decision = "accept"  # 默认接受
-        overall_score = 0.0
+    #     # 对指定类别进行验证
+    #     category_results = []
+    #     final_decision = "accept"  # 默认接受
+    #     overall_score = 0.0
 
-        for category in categories_to_validate:
-            validation_result = self._validate_label_with_feature(query_feature, category)
-            category_results.append({
-                'category': category,
-                'decision': validation_result['decision'],
-                'score': validation_result['score'],
-                'metrics': validation_result.get('metrics', {}),
-                'error': validation_result.get('error')
-            })
+    #     for category in categories_to_validate:
+    #         validation_result = self._validate_label_with_feature(query_feature, category)
+    #         category_results.append({
+    #             'category': category,
+    #             'decision': validation_result['decision'],
+    #             'score': validation_result['score'],
+    #             'metrics': validation_result.get('metrics', {}),
+    #             'error': validation_result.get('error')
+    #         })
             
-            # 综合决策逻辑：任一类别被reject则整体reject，任一类别被review且无reject则整体review
-            if validation_result['decision'] == 'reject':
-                final_decision = 'reject'
-            elif validation_result['decision'] == 'review' and final_decision != 'reject':
-                final_decision = 'review'
+    #         # 综合决策逻辑：任一类别被reject则整体reject，任一类别被review且无reject则整体review
+    #         if validation_result['decision'] == 'reject':
+    #             final_decision = 'reject'
+    #         elif validation_result['decision'] == 'review' and final_decision != 'reject':
+    #             final_decision = 'review'
             
-            overall_score += validation_result['score']
+    #         overall_score += validation_result['score']
 
-        # 计算平均分数
-        if category_results:
-            overall_score = overall_score / len(category_results)
+    #     # 计算平均分数
+    #     if category_results:
+    #         overall_score = overall_score / len(category_results)
 
-        return {
-            'image_id': image_id,
-            'image_path': image_path,
-            'decision': final_decision,
-            'score': overall_score,
-            'categories': category_results,  # 包含验证类别的详细结果
-            'total_categories': len(categories),  # 原始类别总数
-            'validated_categories': len(categories_to_validate),  # 实际验证的类别数
-            'error': None if all(not r.get('error') for r in category_results) else "部分类别验证失败"
-        }
+    #     return {
+    #         'image_id': image_id,
+    #         'image_path': image_path,
+    #         'decision': final_decision,
+    #         'score': overall_score,
+    #         'categories': category_results,  # 包含验证类别的详细结果
+    #         'total_categories': len(categories),  # 原始类别总数
+    #         'validated_categories': len(categories_to_validate),  # 实际验证的类别数
+    #         'error': None if all(not r.get('error') for r in category_results) else "部分类别验证失败"
+    #     }
     
-    def _validate_label_with_feature(self, query_feature: np.ndarray, label: str) -> Dict:
-        """使用已提取的特征进行标签验证"""
-        try:
-            # 计算各项指标
-            p = self.label_validator._compute_knn_consistency(query_feature, label)
-            d_min_norm = self.label_validator._compute_nearest_same_class_distance(query_feature, label)
-            d_mu_norm = self.label_validator._compute_class_mean_distance(query_feature, label)
+    # def _validate_label_with_feature(self, query_feature: np.ndarray, label: str) -> Dict:
+    #     """使用已提取的特征进行标签验证"""
+    #     try:
+    #         # 计算各项指标
+    #         p = self.label_validator._compute_knn_consistency(query_feature, label)
+    #         d_min_norm = self.label_validator._compute_nearest_same_class_distance(query_feature, label)
+    #         d_mu_norm = self.label_validator._compute_class_mean_distance(query_feature, label)
             
-            # 计算置信度评分
-            score = self.label_validator._compute_confidence_score(p, d_min_norm, d_mu_norm)
+    #         # 计算置信度评分
+    #         score = self.label_validator._compute_confidence_score(p, d_min_norm, d_mu_norm)
             
-            # 做出决策
-            if score >= self.label_validator.thresholds['high']:
-                decision = "accept"
-            elif score <= self.label_validator.thresholds['low']:
-                decision = "reject"
-            else:
-                decision = "review"
+    #         # 做出决策
+    #         if score >= self.label_validator.thresholds['high']:
+    #             decision = "accept"
+    #         elif score <= self.label_validator.thresholds['low']:
+    #             decision = "reject"
+    #         else:
+    #             decision = "review"
             
-            return {
-                'score': float(score),
-                'decision': decision,
-                'metrics': {
-                    'knn_consistency': float(p),
-                    'nearest_distance_normalized': float(d_min_norm),
-                    'class_distance_normalized': float(d_mu_norm)
-                }
-            }
+    #         return {
+    #             'score': float(score),
+    #             'decision': decision,
+    #             'metrics': {
+    #                 'knn_consistency': float(p),
+    #                 'nearest_distance_normalized': float(d_min_norm),
+    #                 'class_distance_normalized': float(d_mu_norm)
+    #             }
+    #         }
             
-        except Exception as e:
-            logger.error(f"标签验证失败 - Label: {label}, Query Feature Shape: {query_feature.shape}, Error: {str(e)}")
-            return {
-                'score': -1.0,
-                'decision': 'reject',
-                'error': f"验证过程中发生错误: {str(e)}",
-                'metrics': {
-                    'knn_consistency': 0.0,
-                    'nearest_distance_normalized': 1.0,
-                    'class_distance_normalized': 1.0
-                }
-            }
+    #     except Exception as e:
+    #         logger.error(f"标签验证失败 - Label: {label}, Query Feature Shape: {query_feature.shape}, Error: {str(e)}")
+    #         return {
+    #             'score': -1.0,
+    #             'decision': 'reject',
+    #             'error': f"验证过程中发生错误: {str(e)}",
+    #             'metrics': {
+    #                 'knn_consistency': 0.0,
+    #                 'nearest_distance_normalized': 1.0,
+    #                 'class_distance_normalized': 1.0
+    #             }
+    #         }
     
     def _save_results(self, results: List[Dict], output_json: str):
         """保存清洗结果到JSON文件"""

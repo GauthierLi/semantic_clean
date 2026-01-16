@@ -69,10 +69,15 @@ class ImageFilterApp {
             controlPanel: document.getElementById('controlPanel'),
             fileInputSection: document.querySelector('.file-input-section'),
             
-            // 操作按钮 (完整的和简化的版本共享相同的按钮，通过CSS控制显示)
+            // 操作按钮 - 完整控制面板版本
             saveBtn: document.getElementById('saveBtn'),
             downloadBtn: document.getElementById('downloadBtn'),
             clearSelectionBtn: document.getElementById('clearSelectionBtn'),
+            
+            // 操作按钮 - 简化控制面板版本
+            saveBtnMinimal: document.getElementById('saveBtnMinimal'),
+            downloadBtnMinimal: document.getElementById('downloadBtnMinimal'),
+            clearSelectionBtnMinimal: document.getElementById('clearSelectionBtnMinimal'),
             
             // 显示区域
             categorySection: document.getElementById('categorySection'),
@@ -166,10 +171,21 @@ class ImageFilterApp {
             }
         });
 
-        // 操作按钮
+        // 操作按钮 - 完整控制面板版本
         this.elements.saveBtn.addEventListener('click', () => this.saveChanges());
         this.elements.downloadBtn.addEventListener('click', () => this.downloadResult());
         this.elements.clearSelectionBtn.addEventListener('click', () => this.clearSelection());
+        
+        // 操作按钮 - 简化控制面板版本
+        if (this.elements.saveBtnMinimal) {
+            this.elements.saveBtnMinimal.addEventListener('click', () => this.saveChanges());
+        }
+        if (this.elements.downloadBtnMinimal) {
+            this.elements.downloadBtnMinimal.addEventListener('click', () => this.downloadResult());
+        }
+        if (this.elements.clearSelectionBtnMinimal) {
+            this.elements.clearSelectionBtnMinimal.addEventListener('click', () => this.clearSelection());
+        }
 
         // 分页
         this.elements.prevPageBtn.addEventListener('click', () => this.previousPage());
@@ -1060,6 +1076,17 @@ class ImageFilterApp {
         this.elements.saveBtn.disabled = !this.state.loaded;
         this.elements.downloadBtn.disabled = !this.state.loaded;
         this.elements.clearSelectionBtn.disabled = !hasSelection;
+        
+        // 同时更新简化模式按钮的状态
+        if (this.elements.saveBtnMinimal) {
+            this.elements.saveBtnMinimal.disabled = !this.state.loaded;
+        }
+        if (this.elements.downloadBtnMinimal) {
+            this.elements.downloadBtnMinimal.disabled = !this.state.loaded;
+        }
+        if (this.elements.clearSelectionBtnMinimal) {
+            this.elements.clearSelectionBtnMinimal.disabled = !hasSelection;
+        }
     }
 
     /**
