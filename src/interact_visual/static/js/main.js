@@ -796,18 +796,10 @@ class ImageFilterApp {
         // 应用缩放到图片网格
         const scales = [0.6, 0.8, 1.0, 1.2, 1.4];
         const baseWidth = 280; // CSS中定义的默认宽度
-        const baseHeight = 200; // CSS中定义的默认高度
         const scale = scales[level - 1];
         const newWidth = Math.round(baseWidth * scale);
-        const newHeight = Math.round(baseHeight * scale);
         
         this.elements.imageGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${newWidth}px, 1fr))`;
-        
-        // 同时调整图片容器的高度，保持宽高比
-        const imageWrappers = document.querySelectorAll('.image-wrapper');
-        imageWrappers.forEach(wrapper => {
-            wrapper.style.minHeight = `${newHeight}px`;
-        });
     }
 
     /**
