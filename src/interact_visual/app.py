@@ -221,7 +221,12 @@ def serve_image(image_path):
 
 @app.route('/api/filter_by_category', methods=['POST'])
 def filter_by_category():
-    """根据类别筛选review样本"""
+    """根据类别和决策状态筛选样本
+    
+    筛选逻辑：
+    1. 如果 category='all'：筛选所有样本中指定决策状态的
+    2. 如果 category='具体类别'：筛选包含该类别且该类别决策状态为指定值的样本
+    """
     try:
         data = request.get_json()
         if not data:
@@ -240,21 +245,35 @@ def filter_by_category():
                 'error': 'No data loaded. Please load review data first.'
             }), 400
         
-        # 根据决策状态获取样本
-        if decision == 'review':
-            # review状态使用内存中的review_samples
-            base_samples = current_data['review_samples']
-        else:
-            # accept或reject状态从all_samples中筛选
-            base_samples = filter_samples_by_decision(
-                current_data['all_samples'], decision
-            )
+        # 筛选样本
+        filtered_samples = []
         
-        # 再按类别筛选
-        if category == 'all':
-            filtered_samples = base_samples
-        else:
-            filtered_samples = filter_samples_by_category(base_samples, category)
+        for sample in current_data['all_samples']:
+            # 检查样本是否有categories字段
+            if 'categories' not in sample or not isinstance(sample['categories'], list):
+                continue
+            
+            if category == 'all':
+                # 所有类别模式：检查是否所有类别的决策都匹配
+                # 如果至少有一个类别的决策匹配，就包含该样本
+                category_matches = False
+                for cat_info in sample['categories']:
+                    if isinstance(cat_info, dict) and cat_info.get('decision') == decision:
+                        category_matches = True
+                        break
+                if category_matches:
+                    filtered_samples.append(sample)
+            else:
+                # 特定类别模式：检查该样本是否包含指定类别且该类别的决策匹配
+                category_matches = False
+                for cat_info in sample['categories']:
+                    if (isinstance(cat_info, dict) and 
+                        cat_info.get('category') == category and
+                        cat_info.get('decision') == decision):
+                        category_matches = True
+                        break
+                if category_matches:
+                    filtered_samples.append(sample)
         
         # 分页
         total_count = len(filtered_samples)
@@ -419,89 +438,61 @@ def update_decisions():
             'success': False,
             'error': str(e)
         }), 500
-def save_current_state():
-    """保存当前状态到文件"""
-    try:
-        if not current_data['copy_file']:
-            return jsonify({
-                'success': False,
-                'error': 'No data loaded. Please load review data first.'
-            }), 400
-        
-        # 读取当前副本数据
-        with open(current_data['copy_file'], 'r', encoding='utf-8') as f:
-            copy_data = json.load(f)
-        
-        # 确保所有样本的外层decision都是最新的
-        updated_count = 0
-        for sample in copy_data:
-            if 'categories' in sample and isinstance(sample['categories'], list):
-                old_decision = sample.get('decision')
-                new_decision = update_overall_decision(sample)
-                if old_decision != new_decision:
-                    updated_count += 1
-        
-        # 保存最终数据
-        with open(current_data['copy_file'], 'w', encoding='utf-8') as f:
-            json.dump(copy_data, f, indent=2, ensure_ascii=False)
-        
-        # 统计信息
-        total_count = len(copy_data)
-        accept_count = sum(1 for s in copy_data if s.get('decision') == 'accept')
-        reject_count = sum(1 for s in copy_data if s.get('decision') == 'reject')
-        review_count = sum(1 for s in copy_data if s.get('decision') == 'review')
-        
-        logger.info(f"Saved changes: updated {updated_count} overall decisions")
-        
-        return jsonify({
-            'success': True,
-            'updated_count': updated_count,
-            'statistics': {
-                'total': total_count,
-                'accept': accept_count,
-                'reject': reject_count,
-                'review': review_count
-            },
-            'output_path': current_data['copy_file']
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in save_current_state: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
-def apply_empty_selection_logic(copy_data, selection_mode, current_category):
-    """处理空选择情况的逻辑"""
+def apply_empty_selection_logic(copy_data, selection_mode, current_category, current_decision='review'):
+    """处理空选择情况的逻辑
+    
+    Args:
+        copy_data: 副本数据
+        selection_mode: 选择模式 ('positive' 或 'negative')
+        current_category: 当前类别 ('all' 或具体类别名)
+        current_decision: 当前决策状态 ('review', 'reject' 或 'accept')
+    """
     updated_count = 0
     
     for sample in copy_data:
-        if sample.get('decision') == 'review':
-            # 处理所有类别的情况
-            if current_category == 'all':
-                # 更新所有类别的决策
-                if 'categories' in sample and isinstance(sample['categories'], list):
-                    for cat_info in sample['categories']:
-                        if isinstance(cat_info, dict):
-                            # 根据选择模式设置决策
-                            if selection_mode == 'positive':
-                                # 正选模式：未选择 = reject
-                                if cat_info.get('decision') != 'reject':
-                                    cat_info['decision'] = 'reject'
-                                    updated_count += 1
-                            else:
-                                # 反选模式：未选择 = accept
-                                if cat_info.get('decision') != 'accept':
-                                    cat_info['decision'] = 'accept'
-                                    updated_count += 1
-                # 更新整体决策
-                update_overall_decision(sample)
-                if sample.get('decision') != 'review':  # 只有当整体决策真的改变时才计数
-                    updated_count += 1
-            else:
-                # 处理特定类别的情况
-                category_found = False
+        # 只处理当前决策状态的样本（review, reject 或 accept）
+        if sample.get('decision') != current_decision:
+            continue
+        
+        # 处理所有类别的情况
+        if current_category == 'all':
+            # 更新所有类别的决策
+            if 'categories' in sample and isinstance(sample['categories'], list):
+                for cat_info in sample['categories']:
+                    if isinstance(cat_info, dict):
+                        # 根据选择模式设置决策
+                        if selection_mode == 'positive':
+                            # 正选模式：未选择 = reject
+                            if cat_info.get('decision') != 'reject':
+                                cat_info['decision'] = 'reject'
+                                updated_count += 1
+                        else:
+                            # 反选模式：未选择 = accept
+                            if cat_info.get('decision') != 'accept':
+                                cat_info['decision'] = 'accept'
+                                updated_count += 1
+            # 更新整体决策
+            old_decision = sample.get('decision')
+            new_decision = update_overall_decision(sample)
+            if old_decision != new_decision:
+                updated_count += 1
+        else:
+            # 处理特定类别的情况：只处理包含当前类别且该类别状态与当前决策一致的样本
+            category_found = False
+            category_matches_decision = False
+            if 'categories' in sample and isinstance(sample['categories'], list):
+                for cat_info in sample['categories']:
+                    if (isinstance(cat_info, dict) and 
+                        cat_info.get('category') == current_category):
+                        category_found = True
+                        # 检查该类别的决策状态是否与当前决策一致
+                        if cat_info.get('decision') == current_decision:
+                            category_matches_decision = True
+                        break
+            
+            # 只有当样本包含当前类别且该类别状态与当前决策一致时才处理
+            if category_found and category_matches_decision:
                 if 'categories' in sample and isinstance(sample['categories'], list):
                     for cat_info in sample['categories']:
                         if (isinstance(cat_info, dict) and 
@@ -517,14 +508,13 @@ def apply_empty_selection_logic(copy_data, selection_mode, current_category):
                                 if cat_info.get('decision') != 'accept':
                                     cat_info['decision'] = 'accept'
                                     updated_count += 1
-                            category_found = True
                             break
                 
-                if category_found:
-                    # 更新整体决策
-                    update_overall_decision(sample)
-                    if sample.get('decision') != 'review':  # 只有当整体决策真的改变时才计数
-                        updated_count += 1
+                # 更新整体决策
+                old_decision = sample.get('decision')
+                new_decision = update_overall_decision(sample)
+                if old_decision != new_decision:
+                    updated_count += 1
     
     return updated_count
 
@@ -540,21 +530,12 @@ def save_changes():
                 'error': 'No data loaded. Please load review data first.'
             }), 400
         
-        # 如果没有提供更新数据，直接保存当前状态
-        if not data:
-            return save_current_state()
-        
         # 处理选择状态
         selection_mode = data.get('selection_mode', 'positive')
         current_category = data.get('current_category', 'all')
+        current_decision = data.get('current_decision', 'review')
         selected_images = set(data.get('selected_images', []))
         updates = data.get('updates', [])
-        
-        if not current_data['copy_file']:
-            return jsonify({
-                'success': False,
-                'error': 'No data loaded. Please load review data first.'
-            }), 400
         
         # 读取当前副本数据
         try:
@@ -571,8 +552,8 @@ def save_changes():
         
         # 如果没有选择任何图片，应用空选择逻辑
         if len(selected_images) == 0 and len(updates) == 0:
-            logger.info(f"No images selected, applying empty selection logic for {selection_mode} mode")
-            empty_update_count = apply_empty_selection_logic(copy_data, selection_mode, current_category)
+            logger.info(f"No images selected, applying empty selection logic for {selection_mode} mode on {current_decision} samples")
+            empty_update_count = apply_empty_selection_logic(copy_data, selection_mode, current_category, current_decision)
             total_updated += empty_update_count
             empty_selection_applied = True
             logger.info(f"Empty selection logic updated {empty_update_count} samples")
@@ -602,6 +583,12 @@ def save_changes():
                             update_overall_decision(sample)
                             total_updated += 1
                         break
+            
+            # 更新内存中的数据（确保与文件副本同步）
+            current_data['all_samples'] = copy_data
+            # 重新生成review_samples
+            current_data['review_samples'] = [s for s in copy_data if s.get('decision') == 'review']
+            logger.info(f"Updated in-memory data: {len(current_data['review_samples'])} review samples")
         
         # 保存更新后的副本数据
         try:
@@ -730,9 +717,8 @@ def internal_error(e):
         'error': 'Internal server error'
     }), 500
 
+
 if __name__ == '__main__':
-    import os
-    
     logger.info("Starting Interactive Visual Filter Backend Server")
     logger.info(f"Flask app running in {app.config.get('ENV', 'development')} mode")
     

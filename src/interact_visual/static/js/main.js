@@ -254,7 +254,6 @@ class ImageFilterApp {
                 this.state.loaded = true;
                 this.state.filePath = data.status.original_file;
                 this.state.categories = data.status.categories;
-                this.state.reviewSamples = await this.loadAllSamples();
                 
                 this.elements.filePath.value = this.state.filePath;
                 this.populateCategorySelect();
@@ -339,7 +338,7 @@ class ImageFilterApp {
     /**
      * 加载图片
      */
-    async loadImages() {
+    async loadImages(retryCount = 0) {
         if (!this.state.loaded) return;
 
         this.showProgress('正在加载图片...');
@@ -358,6 +357,11 @@ class ImageFilterApp {
                 })
             });
 
+            // 检查网络连接状态
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
 
             if (data.success) {
@@ -372,6 +376,12 @@ class ImageFilterApp {
                 this.showError(`加载图片失败：${data.error}`);
             }
         } catch (error) {
+            if (error.message.includes('Failed to fetch') && retryCount < 3) {
+                // 网络错误，重试
+                console.log(`网络错误，第${retryCount + 1}次重试...`);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒
+                return this.loadImages(retryCount + 1);
+            }
             this.showError(`加载图片失败：${error.message}`);
         } finally {
             this.hideProgress();
@@ -385,12 +395,11 @@ class ImageFilterApp {
         this.elements.imageGrid.innerHTML = '';
 
         if (this.state.currentSamples.length === 0) {
-            this.elements.imageGrid.innerHTML = `
+        this.elements.imageGrid.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">📷</div>
                     <h3>没有找到图片</h3>
-                    <p>当前类别下没有待审核的图片</p>
-                    <p>当前类别下没有待审核的图片</p>
+                    <p>当前类别和决策状态下没有图片</p>
                 </div>
             `;
             return;
@@ -529,11 +538,6 @@ class ImageFilterApp {
         }
 
         this.updateActionButtons();
-        
-        // 更新性能显示
-        if (this.updatePerformanceStats) {
-            this.updatePerformanceStats();
-        }
     }
 
     /**
@@ -957,7 +961,12 @@ class ImageFilterApp {
         if (this.state.selectedImages.size === 0) {
             const modeText = this.state.selectionMode === 'positive' ? '正选' : '反选';
             const actionText = this.state.selectionMode === 'positive' ? '拒绝' : '接受';
-            const message = `当前为${modeText}模式，未选择图片将把当前类别下所有待审核样本标记为${actionText}。\n\n确定要保存吗？`;
+            const decisionText = {
+                'review': '待审核',
+                'accept': '已接受',
+                'reject': '已拒绝'
+            }[this.state.currentDecision] || this.state.currentDecision;
+            const message = `当前为${modeText}模式，未选择图片将把当前类别下所有${decisionText}样本标记为${actionText}。\n\n确定要保存吗？`;
             
             const confirmed = await this.showConfirm('空选择保存', message);
             if (!confirmed) return;
@@ -973,7 +982,7 @@ class ImageFilterApp {
                     body: JSON.stringify({
                         selection_mode: this.state.selectionMode,
                         current_category: this.state.currentCategory,
-                        decision: this.state.currentDecision,
+                        current_decision: this.state.currentDecision,
                         selected_images: [],
                         updates: []
                     })
@@ -985,12 +994,14 @@ class ImageFilterApp {
                     const modeText = data.empty_selection_applied ? '（空选择逻辑）' : '';
                     this.showSuccess(`保存成功！更新了 ${data.updated_count} 个样本${modeText}`);
                     
+                    // 清空选择
+                    this.state.selectedImages.clear();
+                    
                     // 如果应用了空选择逻辑，需要切换决策状态
                     if (data.empty_selection_applied) {
                         const newDecision = this.state.selectionMode === 'positive' ? 'reject' : 'accept';
                         this.state.currentDecision = newDecision;
                         this.state.currentPage = 1;
-                        this.state.selectedImages.clear();
                         
                         // 更新决策选择器的显示
                         if (this.elements.decisionSelect) {
@@ -998,7 +1009,9 @@ class ImageFilterApp {
                         }
                     }
                     
-                    this.loadImages(); // 重新加载图片以显示更新后的状态
+                    // 重新加载图片以显示更新后的状态
+                    // 这会从副本文件中读取最新数据，已改变决策状态的图片将不再显示在当前视图中
+                    await this.loadImages();
                 } else {
                     this.showError(`保存失败：${data.error}`);
                 }
@@ -1022,16 +1035,28 @@ class ImageFilterApp {
             this.state.selectedImages.forEach(imageId => {
                 const sample = this.state.currentSamples.find(s => s.image_id === imageId);
                 if (sample && sample.categories) {
-                    const targetCategory = sample.categories.find(cat => 
-                        this.state.currentCategory === 'all' || cat.category === this.state.currentCategory
-                    );
-                    
-                    if (targetCategory) {
-                        updates.push({
-                            image_id: imageId,
-                            category: targetCategory.category,
-                            decision: this.state.selectionMode === 'positive' ? 'accept' : 'reject'
+                    if (this.state.currentCategory === 'all') {
+                        // 所有类别模式：更新所有类别
+                        sample.categories.forEach(cat => {
+                            updates.push({
+                                image_id: imageId,
+                                category: cat.category,
+                                decision: this.state.selectionMode === 'positive' ? 'accept' : 'reject'
+                            });
                         });
+                    } else {
+                        // 特定类别模式：只更新指定类别
+                        const targetCategory = sample.categories.find(cat => 
+                            cat.category === this.state.currentCategory
+                        );
+                        
+                        if (targetCategory) {
+                            updates.push({
+                                image_id: imageId,
+                                category: targetCategory.category,
+                                decision: this.state.selectionMode === 'positive' ? 'accept' : 'reject'
+                            });
+                        }
                     }
                 }
             });
@@ -1059,7 +1084,7 @@ class ImageFilterApp {
                     body: JSON.stringify({
                         selection_mode: this.state.selectionMode,
                         current_category: this.state.currentCategory,
-                        decision: this.state.currentDecision,
+                        current_decision: this.state.currentDecision,
                         selected_images: Array.from(this.state.selectedImages),
                         updates: updates
                     })
@@ -1068,9 +1093,11 @@ class ImageFilterApp {
                 const saveData = await saveResponse.json();
 
                 if (saveData.success) {
-                    this.showSuccess(`保存成功！更新了 ${data.updated_count} 个样本`);
+                    this.showSuccess(`保存成功！更新了 ${saveData.updated_count} 个样本`);
                     this.clearSelection();
-                    this.loadImages(); // 重新加载图片以显示更新后的状态
+                    // 重新加载图片以显示更新后的状态
+                    // 这会从副本文件中读取最新数据，已改变决策状态的图片将不再显示在当前视图中
+                    await this.loadImages();
                 } else {
                     this.showError(`保存失败：${saveData.error}`);
                 }
@@ -1103,14 +1130,6 @@ class ImageFilterApp {
         }
     }
 
-    /**
-     * 加载所有样本（用于状态管理）
-     */
-    async loadAllSamples() {
-        // 这里可以实现加载所有样本的逻辑
-        // 为了性能考虑，可以分批加载或者按需加载
-        return [];
-    }
 
     /**
      * UI辅助方法
@@ -1173,13 +1192,7 @@ class ImageFilterApp {
         });
     }
 
-    confirmAction() {
-        // 这个方法由具体的确认对话框使用
-    }
 
-    cancelConfirm() {
-        this.elements.confirmDialog.style.display = 'none';
-    }
 }
 
 // 初始化应用
