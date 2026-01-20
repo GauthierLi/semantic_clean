@@ -108,10 +108,10 @@ EOF
     fi
     
     # 升级pip
-    pip install --upgrade pip
+    pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
     
     # 安装依赖
-    pip install -r "$REQUIREMENTS_FILE"
+    pip install -r "$REQUIREMENTS_FILE" -i https://pypi.tuna.tsinghua.edu.cn/simple
     
     if [ $? -eq 0 ]; then
         log_success "依赖包安装完成"

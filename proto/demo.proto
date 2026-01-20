@@ -12,7 +12,7 @@ enum ImageCategory {
 // 图片数据结构
 message ImageData {
     optional string id = 1;                      // 图片ID
-    optional string image_path = 2;                    // 图片路径
-    repeated ImageCategory category = 3 [default = UNKNOWN];  // 默认类别
+    optional string image_path = 2;              // 图片路径
+    repeated ImageCategory category = 3;         // 默认类别
     repeated float features = 4;                 // 图片特征向量（786维）
 }
