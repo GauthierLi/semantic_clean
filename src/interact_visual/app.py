@@ -331,6 +331,27 @@ def update_sample_decision(sample: Dict, category: str, decision: str) -> bool:
     
     return False
 
+def update_sample_comments(sample: Dict, comments: List[str]) -> bool:
+    """更新单个样本的评论字段
+    
+    Args:
+        sample: 样本数据字典
+        comments: 评论列表
+        
+    Returns:
+        bool: 是否成功更新
+    """
+    if not comments:
+        # 如果评论为空列表且样本已有comments字段，则移除该字段
+        if 'comments' in sample:
+            del sample['comments']
+            return True
+        return False
+    
+    # 设置评论列表
+    sample['comments'] = comments
+    return True
+
 def update_overall_decision(sample: Dict) -> str:
     """根据类别决策更新样本的整体决策"""
     if 'categories' not in sample or not isinstance(sample['categories'], list):
@@ -363,6 +384,7 @@ def update_decisions():
         
         updates = data['updates']
         selection_mode = data.get('selection_mode', 'positive')
+        comments = data.get('comments', [])
         
         if not current_data['copy_file']:
             return jsonify({
@@ -397,6 +419,8 @@ def update_decisions():
                 if sample.get('image_id') == image_id:
                     # 更新指定类别的决策
                     if update_sample_decision(sample, category, decision):
+                        # 更新评论
+                        update_sample_comments(sample, comments)
                         # 更新整体决策
                         update_overall_decision(sample)
                         updated_count += 1
@@ -421,6 +445,7 @@ def update_decisions():
             for sample in current_data['review_samples']:
                 if sample.get('image_id') == image_id:
                     update_sample_decision(sample, category, decision)
+                    update_sample_comments(sample, comments)
                     update_overall_decision(sample)
                     break
         
@@ -564,6 +589,9 @@ def save_changes():
             current_data['review_samples'] = [s for s in copy_data if s.get('decision') == 'review']
             logger.info(f"Updated in-memory data: {len(current_data['review_samples'])} review samples")
         else:
+            # 获取评论
+            comments = data.get('comments', [])
+            
             # 处理每个更新
             for update in updates:
                 image_id = update.get('image_id')
@@ -579,6 +607,8 @@ def save_changes():
                     if sample.get('image_id') == image_id:
                         # 更新指定类别的决策
                         if update_sample_decision(sample, category, decision):
+                            # 更新评论
+                            update_sample_comments(sample, comments)
                             # 更新整体决策
                             update_overall_decision(sample)
                             total_updated += 1

@@ -124,6 +124,38 @@ body {
     min-width: 120px;
 }
 
+/* 评论控制区域 */
+.comment-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.comment-input {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    min-width: 200px;
+    transition: all 0.3s ease;
+}
+
+.comment-input:focus {
+    outline: none;
+    border-color: #007acc;
+    box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+}
+
+/* 评论控制区域行 */
+.comment-controls-row {
+    display: flex;
+    gap: 30px;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e9ecef;
+}
+
 .sample-count {
     color: #6c757d;
     font-size: 14px;
@@ -954,13 +986,12 @@ body {
 .full-controls {
     animation: slideDown 0.3s ease;
     overflow: hidden;
-    max-height: 200px;
+    max-height: none;
 }
 
 .full-controls.hidden {
     display: none;
-    max-height: 0;
-    animation: slideUp 0.3s ease;
+    animation: none;
 }
 
 /* 动画效果 */
@@ -978,22 +1009,18 @@ body {
 @keyframes slideDown {
     from {
         opacity: 0;
-        max-height: 0;
     }
     to {
         opacity: 1;
-        max-height: 200px;
     }
 }
 
 @keyframes slideUp {
     from {
         opacity: 1;
-        max-height: 200px;
     }
     to {
         opacity: 0;
-        max-height: 0;
     }
 }
 

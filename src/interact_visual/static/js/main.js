@@ -125,9 +125,12 @@ class ImageFilterApp {
             gridZoomSlider: document.getElementById('gridZoomSlider'),
             gridZoomLevelDisplay: document.getElementById('gridZoomLevelDisplay'),
             
-            // 简化/完整模式容器
+        // 简化/完整模式容器
             minimalActionControls: document.getElementById('minimalActionControls'),
-            fullControls: document.getElementById('fullControls')
+            fullControls: document.getElementById('fullControls'),
+            
+            // 评论输入框
+            commentInput: document.getElementById('commentInput')
         };
     }
 
@@ -1030,6 +1033,10 @@ class ImageFilterApp {
         this.showProgress('正在保存更改...');
 
         try {
+            // 获取评论内容
+            const commentText = this.elements.commentInput.value.trim();
+            const comments = commentText ? commentText.split(/\s+/).filter(c => c) : [];
+            
             // 准备更新数据
             const updates = [];
             this.state.selectedImages.forEach(imageId => {
@@ -1068,7 +1075,8 @@ class ImageFilterApp {
                 },
                 body: JSON.stringify({
                     updates: updates,
-                    selection_mode: this.state.selectionMode
+                    selection_mode: this.state.selectionMode,
+                    comments: comments
                 })
             });
 
@@ -1086,7 +1094,8 @@ class ImageFilterApp {
                         current_category: this.state.currentCategory,
                         current_decision: this.state.currentDecision,
                         selected_images: Array.from(this.state.selectedImages),
-                        updates: updates
+                        updates: updates,
+                        comments: comments
                     })
                 });
 
