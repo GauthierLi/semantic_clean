@@ -195,3 +195,248 @@ Processing Errors: 0
 - **Progress Display**: Real-time processing progress and statistics
 - **Component Reuse**: Efficient reuse of existing feature extraction and database components
 - **Extensibility**: Modular design facilitates algorithm extension and parameter tuning
+
+# 4. Interactive Visual Review System
+
+The Interactive Visual Review System provides a web-based interface for manual review and annotation of edge cases identified during the data cleaning process.
+
+## 4.1 Quick Start
+
+### Installation
+
+```bash
+# Navigate to the interactive visual module
+cd src/interact_visual
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the server
+python app.py
+```
+
+Or use the one-click startup script:
+
+```bash
+./start_server.sh
+```
+
+The server will start on `http://localhost:8023` by default.
+
+### Basic Workflow
+
+1. **Load the cleaning result file**
+   - Enter the path to your `edge_cases_result.json` file
+   - Click "📂 Load File"
+
+2. **Select a category**
+   - Choose a category from the dropdown menu
+   - Filter by decision status (review/accept/reject)
+
+3. **Review images**
+   - Left-click to zoom in on an image
+   - Right-click to select/deselect images
+   - Ctrl + mouse hover to batch select
+
+4. **Choose selection mode**
+   - **Positive mode**: Selected images → accept, Unselected → reject
+   - **Negative mode**: Selected images → reject, Unselected → accept
+
+5. **Save changes**
+   - Click "💾 Save Changes" to update decisions
+   - Add optional comment tags
+
+6. **Download results**
+   - Click "📥 Download Results" to get the modified JSON file
+
+## 4.2 Core Features
+
+### Data Management
+- **File Loading**: Load `edge_cases_result.json` and create a working copy
+- **Category Filtering**: Filter samples by category and decision status
+- **Pagination**: Display 100/500/1000 images per page
+- **State Synchronization**: Real-time sync between frontend and backend
+
+### User Interaction
+- **Image Selection**: Right-click to select, Ctrl+hover for batch selection
+- **Image Preview**: Left-click to zoom in with zoom controls
+- **Keyboard Shortcuts**: Full keyboard support for efficient navigation
+- **Selection Modes**: Positive and negative selection modes
+
+### Performance Optimization
+- **Lazy Loading**: Images load only when entering the viewport
+- **Memory Management**: Automatic cleanup of off-screen images
+- **Preloading**: Preload next page images for smooth navigation
+- **Performance Monitoring**: Real-time memory usage display
+
+## 4.3 API Endpoints
+
+### Core Endpoints
+
+#### Load Review Data
+```http
+POST /api/load_review_data
+Content-Type: application/json
+
+{
+    "file_path": "/path/to/edge_cases_result.json"
+}
+```
+
+#### Filter by Category
+```http
+POST /api/filter_by_category
+Content-Type: application/json
+
+{
+    "category": "SV_POLICE_CAR",
+    "decision": "review",
+    "page": 1,
+    "per_page": 100
+}
+```
+
+#### Save Changes
+```http
+POST /api/save_changes
+Content-Type: application/json
+
+{
+    "selection_mode": "positive",
+    "current_category": "SV_POLICE_CAR",
+    "current_decision": "review",
+    "selected_images": ["image_id_1", "image_id_2"],
+    "comments": ["tag1", "tag2"]
+}
+```
+
+#### Download Result
+```http
+GET /api/download_result/<filename>
+```
+
+## 4.4 Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| Ctrl + Mouse Hover | Batch select images |
+| Left Click | Zoom image |
+| Right Click | Select/Deselect |
+| Space | Select in modal |
+| ← → | Navigate images |
+| ESC | Close modal |
+| F | Show keyboard shortcuts |
+
+## 4.5 Project Structure
+
+```
+src/interact_visual/
+├── app.py                 # Flask backend application
+├── start_server.sh        # One-click startup script
+├── requirements.txt       # Python dependencies
+├── README.md             # Module documentation
+├── templates/
+│   └── index.html        # Frontend main page
+└── static/
+    ├── css/
+    │   └── style.css     # Stylesheet
+    └── js/
+        ├── main.js        # Core JavaScript logic
+        └── performance.js # Performance optimization module
+```
+
+## 4.6 Technical Details
+
+### Decision Logic
+
+The system supports two-level decision management:
+
+1. **Category-level decisions**: Each category within an image has its own decision status
+2. **Overall decision**: The overall image decision is derived from category decisions
+   - If any category is `reject` → overall `reject`
+   - If any category is `review` (and no `reject`) → overall `review`
+   - Otherwise → overall `accept`
+
+### Empty Selection Logic
+
+When no images are selected:
+- **Positive mode**: All unselected images are set to `reject`
+- **Negative mode**: All unselected images are set to `accept`
+
+This allows for efficient bulk operations.
+
+### Performance Features
+
+- **Lazy Loading**: Uses IntersectionObserver API
+- **Memory Optimization**: Freezes off-screen images
+- **Preloading**: Fetches next page in background
+- **Responsive Design**: Adapts to different screen sizes
+
+## 4.7 Configuration
+
+### Environment Variables
+
+```bash
+# Server port (default: 8023)
+export SERVER_PORT=8023
+
+# Flask debug mode
+export FLASK_DEBUG=1
+```
+
+### Application Settings (in app.py)
+
+```python
+# Pagination
+PER_PAGE = 20  # Images per page
+
+# File upload limit
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+
+# Logging level
+LOG_LEVEL = logging.INFO
+```
+
+## 4.8 Troubleshooting
+
+### Port Already in Use
+```bash
+# Find process using port 8023
+lsof -i :8023
+
+# Kill the process
+kill -9 <PID>
+```
+
+### Images Not Loading
+- Check image paths in the JSON file
+- Verify image files exist and have correct permissions
+- Ensure the server has access to the image directory
+
+### Virtual Environment Issues
+```bash
+# Remove and recreate virtual environment
+rm -rf venv
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+## 4.9 Development
+
+### Running in Development Mode
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run with debug mode
+python app.py
+```
+
+### Adding New Features
+
+1. **Backend**: Add new routes in `app.py`
+2. **Frontend**: Extend `ImageFilterApp` class in `main.js`
+3. **Styles**: Modify `style.css`
+4. **Performance**: Add optimizations in `performance.js`
