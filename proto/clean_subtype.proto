@@ -1,0 +1,56 @@
+syntax = "proto2";
+
+package subtype;
+
+enum ImageCategory {
+    BACKGROUND = 0;
+    CAR = 1;
+    TRUCK = 2;
+    VAN = 3;
+    BUS = 4;
+    CONSTRUCTION_VEHICLE = 5;
+    SV_NONE = 6;
+    SV_FIRE_ENGINE = 7;
+    SV_AMBULANCE = 8;
+    SV_POLICE_CAR = 9;
+    SV_SPRINKLER = 10;
+    SV_SPRINKLER_WO_BRUSH = 11;
+    SV_SANITIZATION_VEHICLE = 12;
+    SV_SCHOOL_BUS = 13;
+    WITH_SLOPE = 14;
+    WO_SLOPE = 15;
+    DOOR_STATUS_BACK = 16;
+    DOOR_STATUS_LEFT = 17;
+    DOOR_STATUS_RIGHT = 18;
+    DOOR_STATUS_FRONT = 19;
+    SEGMENT_HEAD = 20;
+    SEGMENT_TAIL = 21;
+    SEGMENT_LEFT = 22;
+    SEGMENT_RIGHT = 23;
+    ROBOTAXI_NO = 24;
+    ROBOTAXI_RT5 = 25;
+    ROBOTAXI_RT6 = 26;
+    STOP_SIGN_UNSEEN = 27;
+    STOP_SIGN_ON = 28;
+    STOP_SIGN_OFF = 29;
+    PROFESSION_NONE = 30;
+    PROFESSION_POLICE = 31;
+    PROFESSION_CONSTRUCTOR = 32;
+    FACE_TOWARD_FRONT = 33;
+    FACE_TOWARD_NO_FRONT = 34;
+    ADULT = 35;
+    CHILD = 36;
+    CROSS = 37;
+    NO_CROSS = 38;
+    CAT = 39;
+    UNDEFINED = 40;
+    TRAFFIC_CONE = 41;
+    BARRIER_DELINERATOR = 42;
+}
+
+message ImageData {
+    optional string id = 1;                      // 图片ID
+    optional string image_path = 2;                    // 图片路径
+    repeated ImageCategory category = 3;         // 默认类别
+    repeated float features = 4;                 // 图片特征向量（786维）
+}

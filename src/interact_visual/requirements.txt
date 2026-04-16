@@ -1,0 +1,15 @@
+# 交互式图片筛选系统依赖包
+
+# Web框架
+flask==2.3.3
+flask-cors==4.0.0
+werkzeug==2.3.7
+
+# 兼容性支持
+pathlib2==2.3.7
+
+# 开发和调试（可选）
+# pytest==7.4.0
+# pytest-flask==1.2.0
+# black==23.7.0
+# flake8==6.0.0
